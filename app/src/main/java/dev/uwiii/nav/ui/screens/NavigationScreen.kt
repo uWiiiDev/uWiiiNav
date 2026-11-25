@@ -140,7 +140,7 @@ fun NavigationScreen(
 
     // Beim Start einmal im Hintergrund nach Updates schauen
     LaunchedEffect(Unit) {
-        val info = updateChecker.checkForUpdates("1.6.3")
+        val info = updateChecker.checkForUpdates("1.6.4")
         if (info.hasUpdate) {
             updateInfo = info
             showUpdateDialog = true
@@ -383,6 +383,93 @@ fun NavigationScreen(
             modifier = Modifier.fillMaxSize()
         )
 
+        // Wiederverwendbares 3-Punkte-Menü für Suchleiste und untere Navigationsleiste
+        val renderOverflowMenu: @Composable () -> Unit = {
+            Box {
+                IconButton(
+                    onClick = { showOverflowMenu = !showOverflowMenu }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Menü",
+                        tint = TextWhite
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showOverflowMenu,
+                    onDismissRequest = { showOverflowMenu = false },
+                    modifier = Modifier.background(DarkSurface)
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = if (isCameraAlertEnabled) "Gefahrenstellen: An" else "Gefahrenstellen: Aus",
+                                color = if (isCameraAlertEnabled) SpeedRed else TextMuted
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = null,
+                                tint = if (isCameraAlertEnabled) SpeedRed else TextMuted
+                            )
+                        },
+                        onClick = {
+                            isCameraAlertEnabled = !isCameraAlertEnabled
+                            showOverflowMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Offline-Karten", color = TextWhite) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                tint = CyanPrimary
+                            )
+                        },
+                        onClick = {
+                            showOfflineDialog = true
+                            showOverflowMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Sprachansage testen", color = TextWhite) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.VolumeUp,
+                                contentDescription = null,
+                                tint = SpeedGreen
+                            )
+                        },
+                        onClick = {
+                            voiceNavigator.testVoice()
+                            showOverflowMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Nach Updates suchen", color = TextWhite) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.SystemUpdate,
+                                contentDescription = null,
+                                tint = CyanPrimary
+                            )
+                        },
+                        onClick = {
+                            showOverflowMenu = false
+                            scope.launch {
+                                val info = updateChecker.checkForUpdates("1.6.4")
+                                updateInfo = info
+                                showUpdateDialog = true
+                            }
+                        }
+                    )
+                }
+            }
+        }
+
         // 2. Kopfbereich: Entweder Navigations-Hinweis ODER Suchleiste
         Column(
             modifier = Modifier
@@ -402,89 +489,7 @@ fun NavigationScreen(
                         startNavigation(dest, title)
                     },
                     trailingActions = {
-                        Box {
-                            IconButton(
-                                onClick = { showOverflowMenu = !showOverflowMenu }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "Menü",
-                                    tint = TextWhite
-                                )
-                            }
-
-                            DropdownMenu(
-                                expanded = showOverflowMenu,
-                                onDismissRequest = { showOverflowMenu = false },
-                                modifier = Modifier.background(DarkSurface)
-                            ) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = if (isCameraAlertEnabled) "Gefahrenstellen: An" else "Gefahrenstellen: Aus",
-                                            color = if (isCameraAlertEnabled) SpeedRed else TextMuted
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.CameraAlt,
-                                            contentDescription = null,
-                                            tint = if (isCameraAlertEnabled) SpeedRed else TextMuted
-                                        )
-                                    },
-                                    onClick = {
-                                        isCameraAlertEnabled = !isCameraAlertEnabled
-                                        showOverflowMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Offline-Karten", color = TextWhite) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Download,
-                                            contentDescription = null,
-                                            tint = CyanPrimary
-                                        )
-                                    },
-                                    onClick = {
-                                        showOfflineDialog = true
-                                        showOverflowMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Sprachansage testen", color = TextWhite) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.VolumeUp,
-                                            contentDescription = null,
-                                            tint = SpeedGreen
-                                        )
-                                    },
-                                    onClick = {
-                                        voiceNavigator.testVoice()
-                                        showOverflowMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Nach Updates suchen", color = TextWhite) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.SystemUpdate,
-                                            contentDescription = null,
-                                            tint = CyanPrimary
-                                        )
-                                    },
-                                    onClick = {
-                                        showOverflowMenu = false
-                                        scope.launch {
-                                            val info = updateChecker.checkForUpdates("1.6.3")
-                                            updateInfo = info
-                                            showUpdateDialog = true
-                                        }
-                                    }
-                                )
-                            }
-                        }
+                        renderOverflowMenu()
                     }
                 )
             }
@@ -645,6 +650,7 @@ fun NavigationScreen(
                         currentSpeedKmh = currentLocation?.speedKmh ?: 0f,
                         remainingTime = remainingTime,
                         etaTime = etaTime,
+                        overflowMenu = { renderOverflowMenu() },
                         onCancelRoute = { cancelNavigation() }
                     )
                 }
@@ -666,7 +672,7 @@ fun NavigationScreen(
                             Text("Änderungen:\n${updateInfo?.releaseNotes}")
                         }
                     } else {
-                        Text("Du verwendest die aktuellste Version von uWiiiNav (v1.6.3).")
+                        Text("Du verwendest die aktuellste Version von uWiiiNav (v1.6.4).")
                     }
                 },
                 confirmButton = {

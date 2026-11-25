@@ -92,7 +92,8 @@ fun NavigationBottomBar(
     remainingTime: String? = null,
     etaTime: String? = null,
     onCancelRoute: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    overflowMenu: @Composable (() -> Unit)? = null
 ) {
     val roundedSpeed = currentSpeedKmh.roundToInt().coerceAtLeast(0)
     val speedColor = when {
@@ -184,20 +185,27 @@ fun NavigationBottomBar(
                 }
             }
 
-            // 3. Route beenden Button
-            IconButton(
-                onClick = onCancelRoute,
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(SpeedRed.copy(alpha = 0.2f))
-                    .border(1.dp, SpeedRed, CircleShape)
+            // 3. Aktionen rechts (3-Punkte Menü & Route beenden)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Navigation beenden",
-                    tint = SpeedRed
-                )
+                overflowMenu?.invoke()
+
+                IconButton(
+                    onClick = onCancelRoute,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(SpeedRed.copy(alpha = 0.2f))
+                        .border(1.dp, SpeedRed, CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Navigation beenden",
+                        tint = SpeedRed
+                    )
+                }
             }
         }
     }
