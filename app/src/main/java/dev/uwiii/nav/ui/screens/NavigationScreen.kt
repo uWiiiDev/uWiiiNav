@@ -136,7 +136,7 @@ fun NavigationScreen(
 
     // Beim Start einmal im Hintergrund nach Updates schauen
     LaunchedEffect(Unit) {
-        val info = updateChecker.checkForUpdates("1.5.2")
+        val info = updateChecker.checkForUpdates("1.5.3")
         if (info.hasUpdate) {
             updateInfo = info
             showUpdateDialog = true
@@ -342,105 +342,96 @@ fun NavigationScreen(
                     distanceToStepMeters = distanceToNextStep
                 )
             } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        SearchBarOverlay(
-                            onSelectDestination = { dest, title ->
-                                startNavigation(dest, title)
+                SearchBarOverlay(
+                    onSelectDestination = { dest, title ->
+                        startNavigation(dest, title)
+                    },
+                    trailingActions = {
+                        Box {
+                            IconButton(
+                                onClick = { showOverflowMenu = !showOverflowMenu }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "Menü",
+                                    tint = TextWhite
+                                )
                             }
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box {
-                        IconButton(
-                            onClick = { showOverflowMenu = !showOverflowMenu },
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(DarkSurface80)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "Menü",
-                                tint = TextWhite
-                            )
-                        }
 
-                        DropdownMenu(
-                            expanded = showOverflowMenu,
-                            onDismissRequest = { showOverflowMenu = false },
-                            modifier = Modifier.background(DarkSurface)
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = if (isCameraAlertEnabled) "Gefahrenstellen: An" else "Gefahrenstellen: Aus",
-                                        color = if (isCameraAlertEnabled) SpeedRed else TextMuted
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.CameraAlt,
-                                        contentDescription = null,
-                                        tint = if (isCameraAlertEnabled) SpeedRed else TextMuted
-                                    )
-                                },
-                                onClick = {
-                                    isCameraAlertEnabled = !isCameraAlertEnabled
-                                    showOverflowMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Offline-Karten", color = TextWhite) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Download,
-                                        contentDescription = null,
-                                        tint = CyanPrimary
-                                    )
-                                },
-                                onClick = {
-                                    showOfflineDialog = true
-                                    showOverflowMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Sprachansage testen", color = TextWhite) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.VolumeUp,
-                                        contentDescription = null,
-                                        tint = SpeedGreen
-                                    )
-                                },
-                                onClick = {
-                                    voiceNavigator.testVoice()
-                                    showOverflowMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Nach Updates suchen", color = TextWhite) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.SystemUpdate,
-                                        contentDescription = null,
-                                        tint = CyanPrimary
-                                    )
-                                },
-                                onClick = {
-                                    showOverflowMenu = false
-                                    scope.launch {
-                                        val info = updateChecker.checkForUpdates("1.5.2")
-                                        updateInfo = info
-                                        showUpdateDialog = true
+                            DropdownMenu(
+                                expanded = showOverflowMenu,
+                                onDismissRequest = { showOverflowMenu = false },
+                                modifier = Modifier.background(DarkSurface)
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = if (isCameraAlertEnabled) "Gefahrenstellen: An" else "Gefahrenstellen: Aus",
+                                            color = if (isCameraAlertEnabled) SpeedRed else TextMuted
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.CameraAlt,
+                                            contentDescription = null,
+                                            tint = if (isCameraAlertEnabled) SpeedRed else TextMuted
+                                        )
+                                    },
+                                    onClick = {
+                                        isCameraAlertEnabled = !isCameraAlertEnabled
+                                        showOverflowMenu = false
                                     }
-                                }
-                            )
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Offline-Karten", color = TextWhite) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = null,
+                                            tint = CyanPrimary
+                                        )
+                                    },
+                                    onClick = {
+                                        showOfflineDialog = true
+                                        showOverflowMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Sprachansage testen", color = TextWhite) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.VolumeUp,
+                                            contentDescription = null,
+                                            tint = SpeedGreen
+                                        )
+                                    },
+                                    onClick = {
+                                        voiceNavigator.testVoice()
+                                        showOverflowMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Nach Updates suchen", color = TextWhite) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.SystemUpdate,
+                                            contentDescription = null,
+                                            tint = CyanPrimary
+                                        )
+                                    },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        scope.launch {
+                                            val info = updateChecker.checkForUpdates("1.5.3")
+                                            updateInfo = info
+                                            showUpdateDialog = true
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
-                }
+                )
             }
 
             if (isCalculatingRoute) {

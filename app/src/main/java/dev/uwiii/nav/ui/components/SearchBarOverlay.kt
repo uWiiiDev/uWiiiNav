@@ -33,7 +33,8 @@ import org.maplibre.android.geometry.LatLng
 @Composable
 fun SearchBarOverlay(
     onSelectDestination: (LatLng, String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    trailingActions: @Composable (() -> Unit)? = null
 ) {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
@@ -47,7 +48,7 @@ fun SearchBarOverlay(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(DarkSurface80)
-            .padding(8.dp)
+            .padding(horizontal = 4.dp, vertical = 2.dp)
     ) {
         OutlinedTextField(
             value = query,
@@ -74,17 +75,20 @@ fun SearchBarOverlay(
                 )
             },
             trailingIcon = {
-                if (query.isNotEmpty()) {
-                    IconButton(onClick = {
-                        query = ""
-                        results = emptyList()
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = "Löschen",
-                            tint = TextMuted
-                        )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = {
+                            query = ""
+                            results = emptyList()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Löschen",
+                                tint = TextMuted
+                            )
+                        }
                     }
+                    trailingActions?.invoke()
                 }
             },
             singleLine = true,
