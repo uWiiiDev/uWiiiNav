@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -21,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import dev.uwiii.nav.routing.RouteData
 import dev.uwiii.nav.routing.RouteStep
 import dev.uwiii.nav.ui.theme.*
+import kotlin.math.roundToInt
 
 @Composable
 fun NavigationTopBanner(
@@ -86,29 +88,71 @@ fun NavigationTopBanner(
 @Composable
 fun NavigationBottomBar(
     routeData: RouteData,
+    currentSpeedKmh: Float,
+    remainingTime: String? = null,
+    etaTime: String? = null,
     onCancelRoute: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val roundedSpeed = currentSpeedKmh.roundToInt().coerceAtLeast(0)
+    val speedColor = when {
+        roundedSpeed > 130 -> SpeedRed
+        roundedSpeed > 100 -> SpeedYellow
+        else -> SpeedGreen
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(22.dp))
             .background(DarkSurface80)
-            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(20.dp))
-            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(22.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Ankunftszeit & Fahrzeit
-            Column {
+            // 1. Live-Geschwindigkeit (Tacho-Pille)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .border(1.5.dp, speedColor.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "$roundedSpeed",
+                        color = TextWhite,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.SansSerif
+                    )
+                    Text(
+                        text = "km/h",
+                        color = TextMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+
+            // 2. Ankunftszeit & Restfahrzeit
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
-                        text = routeData.etaFormatted,
+                        text = etaTime ?: routeData.etaFormatted,
                         color = SpeedGreen,
-                        fontSize = 28.sp,
+                        fontSize = 24.sp,
                         fontWeight = FontWeight.Black
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -116,35 +160,35 @@ fun NavigationBottomBar(
                         text = "Ankunft",
                         color = TextMuted,
                         fontSize = 12.sp,
-                        modifier = Modifier.padding(bottom = 4.dp)
+                        modifier = Modifier.padding(bottom = 2.dp)
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = routeData.durationMin,
-                        color = TextWhite,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
+                        text = remainingTime ?: routeData.durationMin,
+                        color = CyanPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         text = "•",
                         color = TextMuted,
-                        fontSize = 14.sp
+                        fontSize = 13.sp
                     )
                     Text(
                         text = routeData.distanceKm,
                         color = TextWhite,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
             }
 
-            // Route beenden Button
+            // 3. Route beenden Button
             IconButton(
                 onClick = onCancelRoute,
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(42.dp)
                     .clip(CircleShape)
                     .background(SpeedRed.copy(alpha = 0.2f))
                     .border(1.dp, SpeedRed, CircleShape)

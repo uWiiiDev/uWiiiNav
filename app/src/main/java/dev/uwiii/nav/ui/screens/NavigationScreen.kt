@@ -137,7 +137,7 @@ fun NavigationScreen(
 
     // Beim Start einmal im Hintergrund nach Updates schauen
     LaunchedEffect(Unit) {
-        val info = updateChecker.checkForUpdates("1.6.1")
+        val info = updateChecker.checkForUpdates("1.6.2")
         if (info.hasUpdate) {
             updateInfo = info
             showUpdateDialog = true
@@ -474,7 +474,7 @@ fun NavigationScreen(
                                     onClick = {
                                         showOverflowMenu = false
                                         scope.launch {
-                                            val info = updateChecker.checkForUpdates("1.6.1")
+                                            val info = updateChecker.checkForUpdates("1.6.2")
                                             updateInfo = info
                                             showUpdateDialog = true
                                         }
@@ -515,56 +515,59 @@ fun NavigationScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Dynamische Restfahrzeit & Ankunftszeit berechnen
+            val remainingTime = remember(activeRoute, currentStepIndex, distanceToNextStep) {
+                val route = activeRoute ?: return@remember null
+                if (route.steps.isEmpty() || currentStepIndex >= route.steps.size) {
+                    route.durationMin
+                } else {
+                    val remainingStepsSec = route.steps.drop(currentStepIndex + 1).sumOf { it.durationSeconds }
+                    val currentStep = route.steps[currentStepIndex]
+                    val ratio = (distanceToNextStep / currentStep.distanceMeters.coerceAtLeast(1.0)).coerceIn(0.0, 1.0)
+                    val currentStepSec = currentStep.durationSeconds * ratio
+                    val totalSec = remainingStepsSec + currentStepSec
+                    val mins = (totalSec / 60.0).roundToInt().coerceAtLeast(1)
+                    if (mins >= 60) {
+                        val hours = mins / 60
+                        val remMins = mins % 60
+                        "${hours}h ${remMins}m"
+                    } else {
+                        "$mins Min."
+                    }
+                }
+            }
+
+            val etaTime = remember(activeRoute, currentStepIndex, distanceToNextStep) {
+                val route = activeRoute ?: return@remember null
+                val now = java.util.Calendar.getInstance()
+                val mins = if (currentStepIndex < route.steps.size) {
+                    val remainingStepsSec = route.steps.drop(currentStepIndex + 1).sumOf { it.durationSeconds }
+                    val currentStep = route.steps[currentStepIndex]
+                    val ratio = (distanceToNextStep / currentStep.distanceMeters.coerceAtLeast(1.0)).coerceIn(0.0, 1.0)
+                    ((remainingStepsSec + currentStep.durationSeconds * ratio) / 60.0).roundToInt().coerceAtLeast(1)
+                } else {
+                    (route.durationSeconds / 60.0).roundToInt().coerceAtLeast(1)
+                }
+                now.add(java.util.Calendar.MINUTE, mins)
+                val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMAN)
+                sdf.format(now.time)
+            }
+
             // Tacho und Schnellwahltasten
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
             ) {
-                // Dynamische Restfahrzeit & Ankunftszeit berechnen
-                val remainingTime = remember(activeRoute, currentStepIndex, distanceToNextStep) {
-                    val route = activeRoute ?: return@remember null
-                    if (route.steps.isEmpty() || currentStepIndex >= route.steps.size) {
-                        route.durationMin
-                    } else {
-                        val remainingStepsSec = route.steps.drop(currentStepIndex + 1).sumOf { it.durationSeconds }
-                        val currentStep = route.steps[currentStepIndex]
-                        val ratio = (distanceToNextStep / currentStep.distanceMeters.coerceAtLeast(1.0)).coerceIn(0.0, 1.0)
-                        val currentStepSec = currentStep.durationSeconds * ratio
-                        val totalSec = remainingStepsSec + currentStepSec
-                        val mins = (totalSec / 60.0).roundToInt().coerceAtLeast(1)
-                        if (mins >= 60) {
-                            val hours = mins / 60
-                            val remMins = mins % 60
-                            "${hours}h ${remMins}m"
-                        } else {
-                            "$mins Min."
-                        }
-                    }
+                // Tacho links unten: Nur anzeigen, wenn KEINE Navigation aktiv ist!
+                // Bei aktiver Navigation wandert der Tacho direkt in die untere Navigationsleiste.
+                if (activeRoute == null) {
+                    SpeedometerOverlay(
+                        speedKmh = currentLocation?.speedKmh ?: 0f
+                    )
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
-
-                val etaTime = remember(activeRoute, currentStepIndex, distanceToNextStep) {
-                    val route = activeRoute ?: return@remember null
-                    val now = java.util.Calendar.getInstance()
-                    val mins = if (currentStepIndex < route.steps.size) {
-                        val remainingStepsSec = route.steps.drop(currentStepIndex + 1).sumOf { it.durationSeconds }
-                        val currentStep = route.steps[currentStepIndex]
-                        val ratio = (distanceToNextStep / currentStep.distanceMeters.coerceAtLeast(1.0)).coerceIn(0.0, 1.0)
-                        ((remainingStepsSec + currentStep.durationSeconds * ratio) / 60.0).roundToInt().coerceAtLeast(1)
-                    } else {
-                        (route.durationSeconds / 60.0).roundToInt().coerceAtLeast(1)
-                    }
-                    now.add(java.util.Calendar.MINUTE, mins)
-                    val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMAN)
-                    sdf.format(now.time)
-                }
-
-                // Tacho (km/h) + Restfahrzeit links unten
-                SpeedometerOverlay(
-                    speedKmh = currentLocation?.speedKmh ?: 0f,
-                    remainingTime = remainingTime,
-                    etaTime = etaTime
-                )
 
                 // Schnellwahltasten rechts unten (3D/2D umschalten & Zentrieren)
                 Column(
@@ -636,6 +639,9 @@ fun NavigationScreen(
                 activeRoute?.let { route ->
                     NavigationBottomBar(
                         routeData = route,
+                        currentSpeedKmh = currentLocation?.speedKmh ?: 0f,
+                        remainingTime = remainingTime,
+                        etaTime = etaTime,
                         onCancelRoute = { cancelNavigation() }
                     )
                 }
@@ -657,7 +663,7 @@ fun NavigationScreen(
                             Text("Änderungen:\n${updateInfo?.releaseNotes}")
                         }
                     } else {
-                        Text("Du verwendest die aktuellste Version von uWiiiNav (v1.0.0).")
+                        Text("Du verwendest die aktuellste Version von uWiiiNav (v1.6.2).")
                     }
                 },
                 confirmButton = {
