@@ -47,11 +47,13 @@ import dev.uwiii.nav.ui.components.OfflineMapsDialog
 import dev.uwiii.nav.ui.components.SearchBarOverlay
 import dev.uwiii.nav.ui.components.SpeedCameraAlertBanner
 import dev.uwiii.nav.ui.components.SpeedometerOverlay
+import dev.uwiii.nav.ui.components.VoiceSettingsDialog
 import dev.uwiii.nav.ui.theme.CyanPrimary
 import dev.uwiii.nav.ui.theme.DarkSurface
 import dev.uwiii.nav.ui.theme.DarkSurface80
 import dev.uwiii.nav.ui.theme.SpeedGreen
 import dev.uwiii.nav.ui.theme.SpeedRed
+import dev.uwiii.nav.ui.theme.SpeedYellow
 import dev.uwiii.nav.ui.theme.TextMuted
 import dev.uwiii.nav.ui.theme.TextWhite
 import dev.uwiii.nav.updater.GitHubUpdateChecker
@@ -92,6 +94,7 @@ fun NavigationScreen(
     val voiceNavigator = remember { VoiceNavigator(context) }
     val offlineMapManager = remember { OfflineMapManager(context) }
     var showOfflineDialog by remember { mutableStateOf(false) }
+    var showVoiceDialog by remember { mutableStateOf(false) }
     var activeRoute by remember { mutableStateOf<RouteData?>(null) }
     var currentStepIndex by remember { mutableStateOf(0) }
     var distanceToNextStep by remember { mutableStateOf(0.0) }
@@ -140,7 +143,7 @@ fun NavigationScreen(
 
     // Beim Start einmal im Hintergrund nach Updates schauen
     LaunchedEffect(Unit) {
-        val info = updateChecker.checkForUpdates("1.6.4")
+        val info = updateChecker.checkForUpdates("1.7.0")
         if (info.hasUpdate) {
             updateInfo = info
             showUpdateDialog = true
@@ -435,16 +438,21 @@ fun NavigationScreen(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Sprachansage testen", color = TextWhite) },
+                        text = {
+                            Text(
+                                text = "Stimme & Ansagen",
+                                color = if (voiceNavigator.isMuted) SpeedYellow else TextWhite
+                            )
+                        },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.VolumeUp,
                                 contentDescription = null,
-                                tint = SpeedGreen
+                                tint = if (voiceNavigator.isMuted) SpeedYellow else SpeedGreen
                             )
                         },
                         onClick = {
-                            voiceNavigator.testVoice()
+                            showVoiceDialog = true
                             showOverflowMenu = false
                         }
                     )
@@ -460,7 +468,7 @@ fun NavigationScreen(
                         onClick = {
                             showOverflowMenu = false
                             scope.launch {
-                                val info = updateChecker.checkForUpdates("1.6.4")
+                                val info = updateChecker.checkForUpdates("1.7.0")
                                 updateInfo = info
                                 showUpdateDialog = true
                             }
@@ -650,6 +658,8 @@ fun NavigationScreen(
                         currentSpeedKmh = currentLocation?.speedKmh ?: 0f,
                         remainingTime = remainingTime,
                         etaTime = etaTime,
+                        isMuted = voiceNavigator.isMuted,
+                        onToggleMute = { voiceNavigator.toggleMute() },
                         overflowMenu = { renderOverflowMenu() },
                         onCancelRoute = { cancelNavigation() }
                     )
@@ -672,7 +682,7 @@ fun NavigationScreen(
                             Text("Änderungen:\n${updateInfo?.releaseNotes}")
                         }
                     } else {
-                        Text("Du verwendest die aktuellste Version von uWiiiNav (v1.6.4).")
+                        Text("Du verwendest die aktuellste Version von uWiiiNav (v1.7.0).")
                     }
                 },
                 confirmButton = {
@@ -707,6 +717,14 @@ fun NavigationScreen(
                 offlineManager = offlineMapManager,
                 currentLocation = currentLocation?.let { LatLng(it.latitude, it.longitude) },
                 onDismiss = { showOfflineDialog = false }
+            )
+        }
+
+        // 6. Stimmen- und Sprachausgabe-Dialog
+        if (showVoiceDialog) {
+            VoiceSettingsDialog(
+                voiceNavigator = voiceNavigator,
+                onDismiss = { showVoiceDialog = false }
             )
         }
     }

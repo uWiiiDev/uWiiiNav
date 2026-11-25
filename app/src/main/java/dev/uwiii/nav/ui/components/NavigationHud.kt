@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -91,6 +93,8 @@ fun NavigationBottomBar(
     currentSpeedKmh: Float,
     remainingTime: String? = null,
     etaTime: String? = null,
+    isMuted: Boolean = false,
+    onToggleMute: (() -> Unit)? = null,
     onCancelRoute: () -> Unit,
     modifier: Modifier = Modifier,
     overflowMenu: @Composable (() -> Unit)? = null
@@ -185,17 +189,35 @@ fun NavigationBottomBar(
                 }
             }
 
-            // 3. Aktionen rechts (3-Punkte Menü & Route beenden)
+            // 3. Aktionen rechts (Stumm-Schalter, 3-Punkte Menü & Route beenden)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                if (onToggleMute != null) {
+                    IconButton(
+                        onClick = onToggleMute,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(if (isMuted) SpeedYellow.copy(alpha = 0.2f) else DarkSurface80)
+                            .border(1.dp, if (isMuted) SpeedYellow else Color.White.copy(alpha = 0.15f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = if (isMuted) "Sprachansagen aktivieren" else "Sprachansagen stummschalten",
+                            tint = if (isMuted) SpeedYellow else CyanPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
                 overflowMenu?.invoke()
 
                 IconButton(
                     onClick = onCancelRoute,
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
                         .background(SpeedRed.copy(alpha = 0.2f))
                         .border(1.dp, SpeedRed, CircleShape)
@@ -203,7 +225,8 @@ fun NavigationBottomBar(
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Navigation beenden",
-                        tint = SpeedRed
+                        tint = SpeedRed,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
