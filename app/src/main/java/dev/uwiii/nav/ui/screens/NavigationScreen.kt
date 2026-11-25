@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GpsFixed
@@ -32,6 +33,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.uwiii.nav.audio.VoiceNavigator
+import dev.uwiii.nav.camera.SpeedCamera
+import dev.uwiii.nav.camera.SpeedCameraService
 import dev.uwiii.nav.location.NavLocation
 import dev.uwiii.nav.offline.OfflineMapManager
 import dev.uwiii.nav.routing.RouteData
@@ -40,6 +43,7 @@ import dev.uwiii.nav.ui.components.NavigationBottomBar
 import dev.uwiii.nav.ui.components.NavigationTopBanner
 import dev.uwiii.nav.ui.components.OfflineMapsDialog
 import dev.uwiii.nav.ui.components.SearchBarOverlay
+import dev.uwiii.nav.ui.components.SpeedCameraAlertBanner
 import dev.uwiii.nav.ui.components.SpeedometerOverlay
 import dev.uwiii.nav.ui.theme.CyanPrimary
 import dev.uwiii.nav.ui.theme.DarkSurface80
@@ -89,6 +93,12 @@ fun NavigationScreen(
     var activePolyline by remember { mutableStateOf<Polyline?>(null) }
     var destinationMarker by remember { mutableStateOf<Marker?>(null) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
+
+    // Gefahrenstellen- & Blitzerwarner State
+    val cameraService = remember { SpeedCameraService() }
+    var isCameraAlertEnabled by remember { mutableStateOf(true) }
+    var currentAlertCamera by remember { mutableStateOf<SpeedCamera?>(null) }
+    var currentAlertDistance by remember { mutableStateOf(0.0) }
 
     // GitHub Update Checker State
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -140,6 +150,36 @@ fun NavigationScreen(
                 .build()
 
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 700)
+        }
+    }
+
+    // Beim ersten GPS-Empfang Blitzer im Umkreis laden
+    LaunchedEffect(currentLocation != null) {
+        currentLocation?.let { loc ->
+            cameraService.loadCamerasAround(loc.latitude, loc.longitude, 12.0)
+        }
+    }
+
+    // Blitzer-Prüfung bei jeder GPS-Aktualisierung
+    LaunchedEffect(currentLocation, isCameraAlertEnabled) {
+        val loc = currentLocation ?: return@LaunchedEffect
+        if (isCameraAlertEnabled) {
+            val alert = cameraService.findCameraAhead(loc, maxDistanceMeters = 700.0)
+            if (alert != null) {
+                val (cam, dist) = alert
+                currentAlertCamera = cam
+                currentAlertDistance = dist
+
+                if (cameraService.shouldTriggerVoiceAlert(cam.id)) {
+                    val limitText = if (cam.maxSpeed != null) " bei ${cam.maxSpeed} km/h" else ""
+                    val distText = if (dist >= 100) "${(dist / 50).roundToInt() * 50} Metern" else "Kürze"
+                    voiceNavigator.speak("Achtung, Geschwindigkeitskontrolle in $distText$limitText", force = true)
+                }
+            } else {
+                currentAlertCamera = null
+            }
+        } else {
+            currentAlertCamera = null
         }
     }
 
@@ -206,6 +246,7 @@ fun NavigationScreen(
                 followUserLocation = true
 
                 dev.uwiii.nav.state.NavigationState.setRoute(route, name)
+                scope.launch { cameraService.loadCamerasForRoute(route.points) }
                 voiceNavigator.speak("Route nach $name berechnet. ${route.distanceKm}, Fahrzeit etwa ${route.durationMin}. Gute Fahrt!")
             }
         }
@@ -307,6 +348,20 @@ fun NavigationScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
+                    // Gefahrenstellen- & Blitzer-Warner Schalter
+                    IconButton(
+                        onClick = { isCameraAlertEnabled = !isCameraAlertEnabled },
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(DarkSurface80)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "Gefahrenstellen-Warner",
+                            tint = if (isCameraAlertEnabled) Color(0xFFFF5252) else TextMuted
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                     // Offline-Karten Button
                     IconButton(
                         onClick = { showOfflineDialog = true },
@@ -352,6 +407,14 @@ fun NavigationScreen(
                     trackColor = DarkSurface80
                 )
             }
+
+            // Gefahrenstellen- & Blitzer-Warnbanner
+            SpeedCameraAlertBanner(
+                camera = currentAlertCamera,
+                distanceMeters = currentAlertDistance,
+                currentSpeedKmh = currentLocation?.speedKmh ?: 0f,
+                modifier = Modifier.padding(top = 8.dp)
+            )
         }
 
         // 3. Cockpit-Steuerelemente am unteren Bildschirmrand
