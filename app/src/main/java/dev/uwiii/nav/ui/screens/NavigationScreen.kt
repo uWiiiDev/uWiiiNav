@@ -95,7 +95,8 @@ fun NavigationScreen(
     var activeRoute by remember { mutableStateOf<RouteData?>(null) }
     var currentStepIndex by remember { mutableStateOf(0) }
     var distanceToNextStep by remember { mutableStateOf(0.0) }
-    var activePolyline by remember { mutableStateOf<Polyline?>(null) }
+    var activePolylineCasing by remember { mutableStateOf<Polyline?>(null) }
+    var activePolylineCore by remember { mutableStateOf<Polyline?>(null) }
     var destinationMarker by remember { mutableStateOf<Marker?>(null) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
@@ -136,26 +137,63 @@ fun NavigationScreen(
 
     // Beim Start einmal im Hintergrund nach Updates schauen
     LaunchedEffect(Unit) {
-        val info = updateChecker.checkForUpdates("1.5.3")
+        val info = updateChecker.checkForUpdates("1.6.0")
         if (info.hasUpdate) {
             updateInfo = info
             showUpdateDialog = true
         }
     }
 
-    // Kamera aktualisieren, wenn sich der GPS-Standort ändert
+    // Kamera & 3D-Fahrzeugposition aktualisieren, wenn sich der GPS-Standort ändert
     LaunchedEffect(currentLocation, followUserLocation, is3DMode) {
         val loc = currentLocation ?: return@LaunchedEffect
         val map = mapInstance ?: return@LaunchedEffect
+
+        // 1. 3D-Navigations-Pfeil (Chevron) mit realem Standort & Richtung füttern
+        try {
+            if (map.locationComponent.isLocationComponentActivated) {
+                val androidLoc = android.location.Location("fused").apply {
+                    latitude = loc.latitude
+                    longitude = loc.longitude
+                    bearing = loc.bearing
+                    speed = loc.speedKmh / 3.6f
+                    accuracy = loc.accuracy
+                    time = System.currentTimeMillis()
+                }
+                map.locationComponent.forceLocationUpdate(androidLoc)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 2. Cockpit-Kameraführung mit freiem Blick nach vorn zum Horizont
         if (followUserLocation) {
+            val metrics = context.resources.displayMetrics
+            // Im 3D-Modus Fahrzeug ins untere Viertel/Drittel setzen (70-75% Sicht nach vorn)
+            val bottomPadding = if (is3DMode) (metrics.heightPixels * 0.32).toInt() else 0
+            map.setPadding(0, 0, 0, bottomPadding)
+
+            // Dynamischer Zoom & Neigung:
+            // Bei höherem Tempo (>75 km/h) weiter vorausschauen, bei Stadt/Abbiegungen nah am Straßenniveau
+            val targetZoom = if (activeRoute != null) {
+                if (loc.speedKmh > 75f) 16.2 else 17.6
+            } else {
+                16.8
+            }
+            val targetTilt = if (is3DMode) {
+                if (loc.speedKmh > 75f) 56.0 else 60.0
+            } else {
+                0.0
+            }
+
             val cameraPosition = CameraPosition.Builder()
                 .target(LatLng(loc.latitude, loc.longitude))
-                .zoom(if (activeRoute != null) 17.5 else 16.5)
-                .tilt(if (is3DMode) 55.0 else 0.0) // 3D-Kippung für Cockpit-Gefühl
-                .bearing(loc.bearing.toDouble())   // Karte dreht sich in Fahrtrichtung
+                .zoom(targetZoom)
+                .tilt(targetTilt)
+                .bearing(loc.bearing.toDouble())
                 .build()
 
-            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 700)
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 650)
         }
     }
 
@@ -229,11 +267,18 @@ fun NavigationScreen(
 
             if (route != null) {
                 // Altes Zeichnen entfernen
-                activePolyline?.let { map.removePolyline(it) }
+                activePolylineCasing?.let { map.removePolyline(it) }
+                activePolylineCore?.let { map.removePolyline(it) }
                 destinationMarker?.let { map.removeMarker(it) }
 
-                // Neue Route auf Karte zeichnen (Cyan Leuchtlinie)
-                val polyline = map.addPolyline(
+                // 3D-Navigationsband: Dunkler Tiefenrand (13.5dp) + Leuchtendes Cyan-Fahrband (7.5dp)
+                val casing = map.addPolyline(
+                    PolylineOptions()
+                        .addAll(route.points)
+                        .color(android.graphics.Color.parseColor("#003344"))
+                        .width(13.5f)
+                )
+                val core = map.addPolyline(
                     PolylineOptions()
                         .addAll(route.points)
                         .color(android.graphics.Color.parseColor("#00E5FF"))
@@ -245,7 +290,8 @@ fun NavigationScreen(
                         .title(name)
                 )
 
-                activePolyline = polyline
+                activePolylineCasing = casing
+                activePolylineCore = core
                 destinationMarker = marker
                 activeRoute = route
                 currentStepIndex = 0
@@ -261,9 +307,11 @@ fun NavigationScreen(
     // Hilfsfunktion: Navigation beenden
     fun cancelNavigation() {
         val map = mapInstance
-        activePolyline?.let { map?.removePolyline(it) }
+        activePolylineCasing?.let { map?.removePolyline(it) }
+        activePolylineCore?.let { map?.removePolyline(it) }
         destinationMarker?.let { map?.removeMarker(it) }
-        activePolyline = null
+        activePolylineCasing = null
+        activePolylineCore = null
         destinationMarker = null
         activeRoute = null
         currentStepIndex = 0
@@ -315,8 +363,12 @@ fun NavigationScreen(
                                         .build()
                                     locationComponent.activateLocationComponent(options)
                                     locationComponent.isLocationComponentEnabled = true
-                                    locationComponent.renderMode = RenderMode.COMPASS
-                                    locationComponent.cameraMode = CameraMode.TRACKING_COMPASS
+                                    locationComponent.renderMode = RenderMode.GPS // 3D-Navigationspfeil (Chevron)
+                                    locationComponent.cameraMode = CameraMode.NONE // Eigene Cockpit-Kameraführung
+
+                                    val metrics = ctx.resources.displayMetrics
+                                    val bottomPadding = if (is3DMode) (metrics.heightPixels * 0.32).toInt() else 0
+                                    map.setPadding(0, 0, 0, bottomPadding)
                                 }
                             } catch (e: Exception) {
                                 e.printStackTrace()
@@ -422,7 +474,7 @@ fun NavigationScreen(
                                     onClick = {
                                         showOverflowMenu = false
                                         scope.launch {
-                                            val info = updateChecker.checkForUpdates("1.5.3")
+                                            val info = updateChecker.checkForUpdates("1.6.0")
                                             updateInfo = info
                                             showUpdateDialog = true
                                         }
@@ -481,7 +533,21 @@ fun NavigationScreen(
                 ) {
                     // 2D / 3D Perspektive umschalten
                     FloatingActionButton(
-                        onClick = { is3DMode = !is3DMode },
+                        onClick = {
+                            is3DMode = !is3DMode
+                            val metrics = context.resources.displayMetrics
+                            val bottomPadding = if (is3DMode) (metrics.heightPixels * 0.32).toInt() else 0
+                            mapInstance?.setPadding(0, 0, 0, bottomPadding)
+                            currentLocation?.let { loc ->
+                                val cameraPosition = CameraPosition.Builder()
+                                    .target(LatLng(loc.latitude, loc.longitude))
+                                    .zoom(if (activeRoute != null) 17.5 else 16.5)
+                                    .tilt(if (is3DMode) 60.0 else 0.0)
+                                    .bearing(if (is3DMode) loc.bearing.toDouble() else 0.0)
+                                    .build()
+                                mapInstance?.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 600)
+                            }
+                        },
                         containerColor = DarkSurface80,
                         contentColor = if (is3DMode) CyanPrimary else TextWhite,
                         modifier = Modifier.size(48.dp)
@@ -497,10 +563,13 @@ fun NavigationScreen(
                         onClick = {
                             followUserLocation = true
                             currentLocation?.let { loc ->
+                                val metrics = context.resources.displayMetrics
+                                val bottomPadding = if (is3DMode) (metrics.heightPixels * 0.32).toInt() else 0
+                                mapInstance?.setPadding(0, 0, 0, bottomPadding)
                                 val cameraPosition = CameraPosition.Builder()
                                     .target(LatLng(loc.latitude, loc.longitude))
                                     .zoom(if (activeRoute != null) 17.5 else 16.5)
-                                    .tilt(if (is3DMode) 55.0 else 0.0)
+                                    .tilt(if (is3DMode) 60.0 else 0.0)
                                     .bearing(loc.bearing.toDouble())
                                     .build()
                                 mapInstance?.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 600)
