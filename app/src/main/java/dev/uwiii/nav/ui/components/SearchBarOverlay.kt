@@ -1,9 +1,11 @@
 package dev.uwiii.nav.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -134,17 +136,19 @@ fun SearchBarOverlay(
         // Schnellwahl-Leiste & Favoriten (nur wenn noch keine aktive Textsuche läuft)
         if (query.isEmpty()) {
             Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
-                // 1. Favoriten-Zeile (Zuhause & Arbeit)
+                // Schnellauswahl: Favoriten (Zuhause, Arbeit) & Kategorien als kompakte Icons
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Zuhause Button
-                    FavoriteChip(
-                        title = "Zuhause",
-                        subtitle = favoritesManager.homePlace?.address ?: "Festlegen",
+                    // 1. Zuhause Button
+                    QuickIconButton(
                         icon = Icons.Default.Home,
-                        isSet = favoritesManager.homePlace != null,
+                        contentDescription = "Zuhause",
+                        isHighlighted = favoritesManager.homePlace != null,
                         onClick = {
                             favoritesManager.homePlace?.let {
                                 onSelectDestination(it.location, "Zuhause")
@@ -152,16 +156,14 @@ fun SearchBarOverlay(
                                 showSetDialogType = PlaceType.HOME
                             }
                         },
-                        onLongClick = { showSetDialogType = PlaceType.HOME },
-                        modifier = Modifier.weight(1f)
+                        onLongClick = { showSetDialogType = PlaceType.HOME }
                     )
 
-                    // Arbeit Button
-                    FavoriteChip(
-                        title = "Arbeit",
-                        subtitle = favoritesManager.workPlace?.address ?: "Festlegen",
+                    // 2. Arbeit Button
+                    QuickIconButton(
                         icon = Icons.Default.Work,
-                        isSet = favoritesManager.workPlace != null,
+                        contentDescription = "Arbeit",
+                        isHighlighted = favoritesManager.workPlace != null,
                         onClick = {
                             favoritesManager.workPlace?.let {
                                 onSelectDestination(it.location, "Arbeit")
@@ -169,36 +171,50 @@ fun SearchBarOverlay(
                                 showSetDialogType = PlaceType.WORK
                             }
                         },
-                        onLongClick = { showSetDialogType = PlaceType.WORK },
-                        modifier = Modifier.weight(1f)
+                        onLongClick = { showSetDialogType = PlaceType.WORK }
                     )
-                }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    // Trennlinie zwischen persönlichen Favoriten und Kategorien
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(24.dp)
+                            .background(Color.White.copy(alpha = 0.15f))
+                    )
 
-                // 2. Schnellwahl-Kategorien (Pills)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    CategoryPill(icon = Icons.Default.LocalGasStation, label = "Spritpreise") {
-                        if (onOpenGasRadar != null) {
-                            onOpenGasRadar()
-                        } else {
-                            executeSearch("Tankstelle")
+                    // 3. Spritpreise
+                    QuickIconButton(
+                        icon = Icons.Default.LocalGasStation,
+                        contentDescription = "Spritpreise",
+                        onClick = {
+                            if (onOpenGasRadar != null) {
+                                onOpenGasRadar()
+                            } else {
+                                executeSearch("Tankstelle")
+                            }
                         }
-                    }
-                    CategoryPill(icon = Icons.Default.EvStation, label = "Ladesäulen") {
-                        executeSearch("Ladesäule")
-                    }
-                    CategoryPill(icon = Icons.Default.LocalParking, label = "Parken") {
-                        executeSearch("Parkplatz")
-                    }
-                    CategoryPill(icon = Icons.Default.Restaurant, label = "Essen & Rast") {
-                        executeSearch("Restaurant")
-                    }
+                    )
+
+                    // 4. Ladesäulen
+                    QuickIconButton(
+                        icon = Icons.Default.EvStation,
+                        contentDescription = "Ladesäulen",
+                        onClick = { executeSearch("Ladesäule") }
+                    )
+
+                    // 5. Parken
+                    QuickIconButton(
+                        icon = Icons.Default.LocalParking,
+                        contentDescription = "Parken",
+                        onClick = { executeSearch("Parkplatz") }
+                    )
+
+                    // 6. Essen & Rast
+                    QuickIconButton(
+                        icon = Icons.Default.Restaurant,
+                        contentDescription = "Essen & Rast",
+                        onClick = { executeSearch("Restaurant") }
+                    )
                 }
 
                 // 3. Verlauf der letzten Ziele (wenn vorhanden)
@@ -376,81 +392,37 @@ fun SearchBarOverlay(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FavoriteChip(
-    title: String,
-    subtitle: String,
+private fun QuickIconButton(
     icon: ImageVector,
-    isSet: Boolean,
+    contentDescription: String,
+    isHighlighted: Boolean = false,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isSet) CyanPrimary.copy(alpha = 0.14f) else DarkBackground)
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(if (isHighlighted) CyanPrimary.copy(alpha = 0.18f) else DarkBackground)
             .border(
                 1.dp,
-                if (isSet) CyanPrimary.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.08f),
-                RoundedCornerShape(12.dp)
+                if (isHighlighted) CyanPrimary.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.10f),
+                CircleShape
             )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
-            tint = if (isSet) CyanPrimary else TextMuted,
-            modifier = Modifier.size(18.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = TextWhite,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = subtitle,
-                color = if (isSet) TextWhite.copy(alpha = 0.8f) else CyanPrimary,
-                fontSize = 10.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun CategoryPill(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(DarkBackground)
-            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = CyanPrimary,
-            modifier = Modifier.size(15.dp)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = label,
-            color = TextWhite,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
+            contentDescription = contentDescription,
+            tint = if (isHighlighted) CyanPrimary else TextWhite.copy(alpha = 0.85f),
+            modifier = Modifier.size(20.dp)
         )
     }
 }
