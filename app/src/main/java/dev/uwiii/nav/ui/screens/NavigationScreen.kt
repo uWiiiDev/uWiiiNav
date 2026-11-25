@@ -44,6 +44,7 @@ import dev.uwiii.nav.camera.SpeedCamera
 import dev.uwiii.nav.camera.SpeedCameraService
 import dev.uwiii.nav.discovery.DiscoveryItem
 import dev.uwiii.nav.discovery.DiscoveryService
+import dev.uwiii.nav.favorites.FavoritesManager
 import dev.uwiii.nav.location.NavLocation
 import dev.uwiii.nav.offline.OfflineMapManager
 import dev.uwiii.nav.routing.RouteData
@@ -115,6 +116,7 @@ fun NavigationScreen(
     val routingService = remember { RoutingService() }
     val voiceNavigator = remember { VoiceNavigator(context) }
     val offlineMapManager = remember { OfflineMapManager(context) }
+    val favoritesManager = remember { FavoritesManager(context) }
     var showOfflineDialog by remember { mutableStateOf(false) }
     var showVoiceDialog by remember { mutableStateOf(false) }
     var activeRoute by remember { mutableStateOf<RouteData?>(null) }
@@ -382,6 +384,7 @@ fun NavigationScreen(
                 followUserLocation = true
 
                 dev.uwiii.nav.state.NavigationState.setRoute(route, name)
+                favoritesManager.addRecent(name, "", destination)
                 scope.launch { cameraService.loadCamerasForRoute(route.points) }
                 scope.launch { trafficService.loadTrafficForRoute(route) }
                 voiceNavigator.speak("Route nach $name berechnet. ${route.distanceKm}, Fahrzeit etwa ${route.durationMin}. Gute Fahrt!")
@@ -659,6 +662,8 @@ fun NavigationScreen(
                 )
             } else {
                 SearchBarOverlay(
+                    userLocation = currentLocation?.let { LatLng(it.latitude, it.longitude) },
+                    favoritesManager = favoritesManager,
                     onSelectDestination = { dest, title ->
                         startNavigation(dest, title)
                     },
