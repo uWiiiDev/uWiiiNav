@@ -20,9 +20,19 @@ enum class FuelType {
 }
 
 class GasPriceService(context: Context) {
+    companion object {
+        const val DEMO_API_KEY = "00000000-0000-0000-0000-000000000002"
+    }
+
     private val prefs = context.applicationContext.getSharedPreferences("nav_fuel_settings", Context.MODE_PRIVATE)
 
-    var apiKey by mutableStateOf(prefs.getString("api_key", "00000000-0000-0000-0000-000000000002") ?: "00000000-0000-0000-0000-000000000002")
+    var apiKey by mutableStateOf(prefs.getString("api_key", DEMO_API_KEY) ?: DEMO_API_KEY)
+        private set
+
+    val isDemoKey: Boolean
+        get() = apiKey.isBlank() || apiKey == DEMO_API_KEY
+
+    var lastErrorMessage by mutableStateOf<String?>(null)
         private set
 
     var preferredFuelType by mutableStateOf(
@@ -36,8 +46,14 @@ class GasPriceService(context: Context) {
         .build()
 
     fun updateApiKey(key: String) {
-        apiKey = key.trim()
+        val sanitized = key.trim()
+        apiKey = if (sanitized.isBlank()) DEMO_API_KEY else sanitized
         prefs.edit().putString("api_key", apiKey).apply()
+        lastErrorMessage = null
+    }
+
+    fun resetToDemoKey() {
+        updateApiKey(DEMO_API_KEY)
     }
 
     fun updatePreferredFuelType(type: FuelType) {
@@ -59,13 +75,19 @@ class GasPriceService(context: Context) {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
+                if (!response.isSuccessful) {
+                    lastErrorMessage = "Serverfehler HTTP ${response.code}"
+                    return@withContext emptyList()
+                }
                 val body = response.body?.string() ?: return@withContext emptyList()
                 val json = JSONObject(body)
-                if (!json.optBoolean("ok", false) && json.optString("status") != "ok") {
+                val ok = json.optBoolean("ok", false) || json.optString("status") == "ok"
+                if (!ok) {
+                    lastErrorMessage = json.optString("message", "API-Fehler von Tankerkönig")
                     return@withContext emptyList()
                 }
 
+                lastErrorMessage = null
                 val stationsArr = json.optJSONArray("stations") ?: return@withContext emptyList()
                 val list = ArrayList<GasStation>()
 
@@ -107,6 +129,7 @@ class GasPriceService(context: Context) {
             }
         } catch (e: Exception) {
             e.printStackTrace()
+            lastErrorMessage = e.localizedMessage ?: "Netzwerkfehler"
             emptyList()
         }
     }
