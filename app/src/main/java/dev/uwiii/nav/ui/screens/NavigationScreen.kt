@@ -112,7 +112,7 @@ fun NavigationScreen(
     var showUpdateDialog by remember { mutableStateOf(false) }
     val updateChecker = remember { GitHubUpdateChecker(context) }
 
-    // Lifecycle Cleanup für Audio & Map
+    // MapView Lifecycle
     DisposableEffect(lifecycleOwner, mapViewInstance) {
         val mapView = mapViewInstance ?: return@DisposableEffect onDispose {}
         val observer = LifecycleEventObserver { _, event ->
@@ -121,23 +121,26 @@ fun NavigationScreen(
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> {
-                    mapView.onDestroy()
-                    voiceNavigator.shutdown()
-                }
+                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
                 else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // VoiceNavigator Lifecycle (nur einmalig beim Verlassen des Screens beenden)
+    DisposableEffect(Unit) {
+        onDispose {
             voiceNavigator.shutdown()
         }
     }
 
     // Beim Start einmal im Hintergrund nach Updates schauen
     LaunchedEffect(Unit) {
-        val info = updateChecker.checkForUpdates("1.6.2")
+        val info = updateChecker.checkForUpdates("1.6.3")
         if (info.hasUpdate) {
             updateInfo = info
             showUpdateDialog = true
@@ -474,7 +477,7 @@ fun NavigationScreen(
                                     onClick = {
                                         showOverflowMenu = false
                                         scope.launch {
-                                            val info = updateChecker.checkForUpdates("1.6.2")
+                                            val info = updateChecker.checkForUpdates("1.6.3")
                                             updateInfo = info
                                             showUpdateDialog = true
                                         }
@@ -663,7 +666,7 @@ fun NavigationScreen(
                             Text("Änderungen:\n${updateInfo?.releaseNotes}")
                         }
                     } else {
-                        Text("Du verwendest die aktuellste Version von uWiiiNav (v1.6.2).")
+                        Text("Du verwendest die aktuellste Version von uWiiiNav (v1.6.3).")
                     }
                 },
                 confirmButton = {
