@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Navigation
@@ -32,10 +33,12 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.uwiii.nav.audio.VoiceNavigator
 import dev.uwiii.nav.location.NavLocation
+import dev.uwiii.nav.offline.OfflineMapManager
 import dev.uwiii.nav.routing.RouteData
 import dev.uwiii.nav.routing.RoutingService
 import dev.uwiii.nav.ui.components.NavigationBottomBar
 import dev.uwiii.nav.ui.components.NavigationTopBanner
+import dev.uwiii.nav.ui.components.OfflineMapsDialog
 import dev.uwiii.nav.ui.components.SearchBarOverlay
 import dev.uwiii.nav.ui.components.SpeedometerOverlay
 import dev.uwiii.nav.ui.theme.CyanPrimary
@@ -78,6 +81,8 @@ fun NavigationScreen(
     // Routing & Navigation State
     val routingService = remember { RoutingService() }
     val voiceNavigator = remember { VoiceNavigator(context) }
+    val offlineMapManager = remember { OfflineMapManager(context) }
+    var showOfflineDialog by remember { mutableStateOf(false) }
     var activeRoute by remember { mutableStateOf<RouteData?>(null) }
     var currentStepIndex by remember { mutableStateOf(0) }
     var distanceToNextStep by remember { mutableStateOf(0.0) }
@@ -298,6 +303,20 @@ fun NavigationScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
+                    // Offline-Karten Button
+                    IconButton(
+                        onClick = { showOfflineDialog = true },
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(DarkSurface80)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Offline-Karten verwalten",
+                            tint = CyanPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                     IconButton(
                         onClick = {
                             scope.launch {
@@ -451,6 +470,15 @@ fun NavigationScreen(
                         }
                     }
                 }
+            )
+        }
+
+        // 5. Offline-Karten-Manager Dialog
+        if (showOfflineDialog) {
+            OfflineMapsDialog(
+                offlineManager = offlineMapManager,
+                currentLocation = currentLocation?.let { LatLng(it.latitude, it.longitude) },
+                onDismiss = { showOfflineDialog = false }
             )
         }
     }
