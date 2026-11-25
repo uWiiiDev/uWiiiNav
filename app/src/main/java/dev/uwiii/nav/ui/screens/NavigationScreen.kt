@@ -84,6 +84,15 @@ fun NavigationScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
 
+    val currentVersionName = remember {
+        try {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            pInfo.versionName ?: "1.7.1"
+        } catch (e: Exception) {
+            "1.7.1"
+        }
+    }
+
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     var is3DMode by remember { mutableStateOf(true) }
@@ -143,7 +152,7 @@ fun NavigationScreen(
 
     // Beim Start einmal im Hintergrund nach Updates schauen
     LaunchedEffect(Unit) {
-        val info = updateChecker.checkForUpdates("1.7.0")
+        val info = updateChecker.checkForUpdates(currentVersionName)
         if (info.hasUpdate) {
             updateInfo = info
             showUpdateDialog = true
@@ -468,12 +477,32 @@ fun NavigationScreen(
                         onClick = {
                             showOverflowMenu = false
                             scope.launch {
-                                val info = updateChecker.checkForUpdates("1.7.0")
+                                val info = updateChecker.checkForUpdates(currentVersionName)
                                 updateInfo = info
                                 showUpdateDialog = true
                             }
                         }
                     )
+
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.12f),
+                        modifier = Modifier.padding(vertical = 4.dp, horizontal = 12.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "uWiiiNav v$currentVersionName",
+                            color = TextMuted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
@@ -682,7 +711,7 @@ fun NavigationScreen(
                             Text("Änderungen:\n${updateInfo?.releaseNotes}")
                         }
                     } else {
-                        Text("Du verwendest die aktuellste Version von uWiiiNav (v1.7.0).")
+                        Text("Du verwendest die aktuellste Version von uWiiiNav (v$currentVersionName).")
                     }
                 },
                 confirmButton = {
