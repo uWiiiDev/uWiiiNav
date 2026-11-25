@@ -136,7 +136,7 @@ fun NavigationScreen(
 
     // Beim Start einmal im Hintergrund nach Updates schauen
     LaunchedEffect(Unit) {
-        val info = updateChecker.checkForUpdates("1.5.0")
+        val info = updateChecker.checkForUpdates("1.5.1")
         if (info.hasUpdate) {
             updateInfo = info
             showUpdateDialog = true
@@ -432,7 +432,7 @@ fun NavigationScreen(
                                 onClick = {
                                     showOverflowMenu = false
                                     scope.launch {
-                                        val info = updateChecker.checkForUpdates("1.5.0")
+                                        val info = updateChecker.checkForUpdates("1.5.1")
                                         updateInfo = info
                                         showUpdateDialog = true
                                     }

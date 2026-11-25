@@ -12,8 +12,8 @@ android {
         applicationId = "dev.uwiii.nav"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.5.0"
+        versionCode = 6
+        versionName = "1.5.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -21,8 +21,21 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("signing/uWiiiNav.keystore")
+            storePassword = "uWiiiNavSecret"
+            keyAlias = "uWiiiNavKey"
+            keyPassword = "uWiiiNavSecret"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("release")
+        }
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
