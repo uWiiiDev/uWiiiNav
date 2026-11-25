@@ -67,8 +67,9 @@ dependencies {
     // Networking (for Overpass / OSM routing & GitHub updater)
     implementation(libs.okhttp)
 
-    // Android Car App Library (Android Auto preparation)
+    // Android Car App Library (Android Auto)
     implementation(libs.androidx.car.app)
+    implementation(libs.androidx.car.app.projected)
 
     debugImplementation(libs.androidx.ui.tooling)
 }

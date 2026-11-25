@@ -155,11 +155,13 @@ fun NavigationScreen(
             currentStep.location.latitude, currentStep.location.longitude
         )
         distanceToNextStep = dist
+        dev.uwiii.nav.state.NavigationState.updateStep(currentStep, dist)
 
         // Nächster Schritt erreicht?
         if (dist < 35.0 && currentStepIndex < route.steps.size - 1) {
             currentStepIndex++
             val nextStep = route.steps[currentStepIndex]
+            dev.uwiii.nav.state.NavigationState.updateStep(nextStep, nextStep.distanceMeters)
             voiceNavigator.speak(nextStep.instruction, force = true)
         } else if (dist in 150.0..300.0) {
             val roundedDist = ((dist / 50).roundToInt() * 50).coerceAtLeast(50)
@@ -203,6 +205,7 @@ fun NavigationScreen(
                 currentStepIndex = 0
                 followUserLocation = true
 
+                dev.uwiii.nav.state.NavigationState.setRoute(route, name)
                 voiceNavigator.speak("Route nach $name berechnet. ${route.distanceKm}, Fahrzeit etwa ${route.durationMin}. Gute Fahrt!")
             }
         }
@@ -217,6 +220,7 @@ fun NavigationScreen(
         destinationMarker = null
         activeRoute = null
         currentStepIndex = 0
+        dev.uwiii.nav.state.NavigationState.clearRoute()
         voiceNavigator.speak("Navigation beendet.")
     }
 

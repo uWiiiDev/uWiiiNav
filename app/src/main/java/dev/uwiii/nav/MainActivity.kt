@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
                     if (hasLocationPermission) {
                         locationClient.getLocationUpdates().collect { loc ->
                             currentLocation = loc
+                            dev.uwiii.nav.state.NavigationState.updateLocation(loc)
                         }
                     }
                 }
