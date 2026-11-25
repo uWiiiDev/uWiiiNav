@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">uWiiiNav</string>
+    <string name="speed_unit">km/h</string>
+    <string name="recenter_map">Standort zentrieren</string>
+    <string name="permission_location_rationale">uWiiiNav benötigt den Standortzugriff, um dir deine Position auf der Karte anzuzeigen und Navigationsrouten zu berechnen.</string>
+    <string name="grant_permission">Berechtigung erteilen</string>
+    <string name="checking_updates">Prüfe auf Updates…</string>
+    <string name="new_update_available">Neues Update verfügbar</string>
+    <string name="update_now">Jetzt aktualisieren</string>
+</resources>
