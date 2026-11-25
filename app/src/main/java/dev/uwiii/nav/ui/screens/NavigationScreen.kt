@@ -365,7 +365,13 @@ fun NavigationScreen(
             voiceNavigator.speak(nextStep.instruction, force = true)
         } else if (dist in 150.0..300.0) {
             val roundedDist = ((dist / 50).roundToInt() * 50).coerceAtLeast(50)
-            voiceNavigator.speak("In $roundedDist Metern ${currentStep.instruction.lowercase()}")
+            val laneHint = currentStep.getLaneVoiceHint()
+            val speechText = if (laneHint != null) {
+                "In $roundedDist Metern ${currentStep.instruction.lowercase()}. $laneHint."
+            } else {
+                "In $roundedDist Metern ${currentStep.instruction.lowercase()}"
+            }
+            voiceNavigator.speak(speechText)
         } else if (dist < 40.0 && currentStepIndex == route.steps.size - 1) {
             voiceNavigator.speak("Sie haben Ihr Ziel erreicht!")
             val finished = tripLogger.finishTrip()

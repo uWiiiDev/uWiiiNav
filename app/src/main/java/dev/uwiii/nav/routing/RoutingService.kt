@@ -71,6 +71,31 @@ class RoutingService {
 
                         val instruction = buildGermanInstruction(mType, mModifier, streetName)
 
+                        // Fahrspuren (Lane Guidance) aus intersections extrahieren
+                        val lanesList = ArrayList<LaneInfo>()
+                        val intersections = s.optJSONArray("intersections")
+                        if (intersections != null) {
+                            for (j in 0 until intersections.length()) {
+                                val inter = intersections.optJSONObject(j) ?: continue
+                                val lanesArr = inter.optJSONArray("lanes")
+                                if (lanesArr != null && lanesArr.length() > 0) {
+                                    for (k in 0 until lanesArr.length()) {
+                                        val laneObj = lanesArr.optJSONObject(k) ?: continue
+                                        val valid = laneObj.optBoolean("valid", false)
+                                        val indicationsArr = laneObj.optJSONArray("indications")
+                                        val indications = ArrayList<String>()
+                                        if (indicationsArr != null) {
+                                            for (m in 0 until indicationsArr.length()) {
+                                                indications.add(indicationsArr.getString(m))
+                                            }
+                                        }
+                                        lanesList.add(LaneInfo(isValid = valid, indications = indications))
+                                    }
+                                    break
+                                }
+                            }
+                        }
+
                         stepsList.add(
                             RouteStep(
                                 instruction = instruction,
@@ -79,7 +104,8 @@ class RoutingService {
                                 maneuverModifier = mModifier,
                                 location = stepLatLng,
                                 distanceMeters = stepDistance,
-                                durationSeconds = stepDuration
+                                durationSeconds = stepDuration,
+                                lanes = lanesList
                             )
                         )
                     }

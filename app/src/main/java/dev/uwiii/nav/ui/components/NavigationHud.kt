@@ -37,13 +37,13 @@ fun NavigationTopBanner(
     val icon = getManeuverIcon(step.maneuverType, step.maneuverModifier)
     val formattedDist = formatDistance(distanceToStepMeters)
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(DarkSurface80)
             .border(1.5.dp, CyanPrimary.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-            .padding(16.dp)
+            .padding(14.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -52,7 +52,7 @@ fun NavigationTopBanner(
             // Abbiege-Symbol im Kreis
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(50.dp)
                     .clip(CircleShape)
                     .background(CyanPrimary),
                 contentAlignment = Alignment.Center
@@ -61,11 +61,11 @@ fun NavigationTopBanner(
                     imageVector = icon,
                     contentDescription = null,
                     tint = Color.Black,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(30.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -77,12 +77,21 @@ fun NavigationTopBanner(
                 Text(
                     text = step.instruction,
                     color = TextWhite,
-                    fontSize = 16.sp,
+                    fontSize = 15.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+
+        // Fahrspurassistent (Lane Guidance Bar)
+        if (step.lanes.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            LaneGuidanceBar(
+                lanes = step.lanes,
+                modifier = Modifier.align(Alignment.Start)
+            )
         }
     }
 }

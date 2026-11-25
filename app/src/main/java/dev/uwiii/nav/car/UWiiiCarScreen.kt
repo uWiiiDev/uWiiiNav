@@ -12,6 +12,8 @@ import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarIcon
 import androidx.car.app.model.Distance
 import androidx.car.app.model.Template
+import androidx.car.app.navigation.model.Lane
+import androidx.car.app.navigation.model.LaneDirection
 import androidx.car.app.navigation.model.Maneuver
 import androidx.car.app.navigation.model.NavigationTemplate
 import androidx.car.app.navigation.model.RoutingInfo
@@ -67,14 +69,36 @@ class UWiiiCarScreen(carContext: CarContext) : Screen(carContext), SurfaceCallba
             val maneuverType = mapManeuverType(currentStep.maneuverType, currentStep.maneuverModifier)
             val maneuver = Maneuver.Builder(maneuverType).build()
 
-            val step = Step.Builder(currentStep.instruction)
+            val stepBuilder = Step.Builder(currentStep.instruction)
                 .setManeuver(maneuver)
                 .apply {
                     if (currentStep.streetName.isNotBlank()) {
                         setRoad(currentStep.streetName)
                     }
                 }
-                .build()
+
+            if (currentStep.lanes.isNotEmpty()) {
+                for (laneInfo in currentStep.lanes) {
+                    val laneBuilder = Lane.Builder()
+                    val indications = if (laneInfo.indications.isEmpty()) listOf("straight") else laneInfo.indications
+                    for (ind in indications) {
+                        val shape = when (ind) {
+                            "left" -> LaneDirection.SHAPE_NORMAL_LEFT
+                            "right" -> LaneDirection.SHAPE_NORMAL_RIGHT
+                            "slight left" -> LaneDirection.SHAPE_SLIGHT_LEFT
+                            "slight right" -> LaneDirection.SHAPE_SLIGHT_RIGHT
+                            "sharp left" -> LaneDirection.SHAPE_SHARP_LEFT
+                            "sharp right" -> LaneDirection.SHAPE_SHARP_RIGHT
+                            "uturn" -> LaneDirection.SHAPE_U_TURN_LEFT
+                            else -> LaneDirection.SHAPE_STRAIGHT
+                        }
+                        laneBuilder.addDirection(LaneDirection.create(shape, laneInfo.isValid))
+                    }
+                    stepBuilder.addLane(laneBuilder.build())
+                }
+            }
+
+            val step = stepBuilder.build()
 
             val dist = if (distanceMeters >= 1000) {
                 Distance.create(distanceMeters / 1000.0, Distance.UNIT_KILOMETERS)
