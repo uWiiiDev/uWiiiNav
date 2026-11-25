@@ -11,12 +11,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
@@ -416,6 +419,25 @@ fun NavigationScreen(
                     DropdownMenuItem(
                         text = {
                             Text(
+                                text = if (voiceNavigator.isMuted) "Sprachansagen: Stumm" else "Sprachansagen: Aktiv",
+                                color = if (voiceNavigator.isMuted) SpeedYellow else SpeedGreen
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (voiceNavigator.isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = null,
+                                tint = if (voiceNavigator.isMuted) SpeedYellow else SpeedGreen
+                            )
+                        },
+                        onClick = {
+                            voiceNavigator.toggleMute()
+                            showOverflowMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
                                 text = if (isCameraAlertEnabled) "Gefahrenstellen: An" else "Gefahrenstellen: Aus",
                                 color = if (isCameraAlertEnabled) SpeedRed else TextMuted
                             )
@@ -433,6 +455,25 @@ fun NavigationScreen(
                         }
                     )
                     DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "Stimme auswählen",
+                                color = TextWhite
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.RecordVoiceOver,
+                                contentDescription = null,
+                                tint = CyanPrimary
+                            )
+                        },
+                        onClick = {
+                            showVoiceDialog = true
+                            showOverflowMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
                         text = { Text("Offline-Karten", color = TextWhite) },
                         leadingIcon = {
                             Icon(
@@ -443,25 +484,6 @@ fun NavigationScreen(
                         },
                         onClick = {
                             showOfflineDialog = true
-                            showOverflowMenu = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = "Stimme & Ansagen",
-                                color = if (voiceNavigator.isMuted) SpeedYellow else TextWhite
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.VolumeUp,
-                                contentDescription = null,
-                                tint = if (voiceNavigator.isMuted) SpeedYellow else SpeedGreen
-                            )
-                        },
-                        onClick = {
-                            showVoiceDialog = true
                             showOverflowMenu = false
                         }
                     )
@@ -687,8 +709,6 @@ fun NavigationScreen(
                         currentSpeedKmh = currentLocation?.speedKmh ?: 0f,
                         remainingTime = remainingTime,
                         etaTime = etaTime,
-                        isMuted = voiceNavigator.isMuted,
-                        onToggleMute = { voiceNavigator.toggleMute() },
                         overflowMenu = { renderOverflowMenu() },
                         onCancelRoute = { cancelNavigation() }
                     )
