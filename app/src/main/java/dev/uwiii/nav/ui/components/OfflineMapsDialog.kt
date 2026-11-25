@@ -65,7 +65,7 @@ fun OfflineMapsDialog(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Karten ohne Internet nutzen",
+                            text = "${areas.size} Regionen & Bundesländer verfügbar",
                             color = TextMuted,
                             fontSize = 13.sp
                         )
@@ -92,7 +92,7 @@ fun OfflineMapsDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 400.dp)
+                        .heightIn(max = 520.dp)
                 ) {
                     items(areas) { area ->
                         val status = offlineManager.statusMap[area.id] ?: AreaStatus.NotDownloaded

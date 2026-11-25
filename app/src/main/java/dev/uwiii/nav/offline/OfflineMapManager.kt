@@ -70,55 +70,168 @@ class OfflineMapManager(private val context: Context) {
             )
         }
 
-        // 2. Wichtige Bundesländer
-        list.add(
+        // 2. Alle 16 deutschen Bundesländer (alphabetisch sortiert)
+        val bundeslaender = listOf(
             OfflineArea(
                 id = "bw",
                 name = "Baden-Württemberg",
-                bounds = LatLngBounds.from(49.8, 10.5, 47.5, 7.5),
+                bounds = LatLngBounds.from(49.79, 10.50, 47.53, 7.51),
                 minZoom = 10.0,
                 maxZoom = 15.0,
                 approxMb = 350
-            )
-        )
-        list.add(
+            ),
             OfflineArea(
                 id = "by",
                 name = "Bayern",
-                bounds = LatLngBounds.from(50.6, 13.9, 47.2, 8.9),
+                bounds = LatLngBounds.from(50.57, 13.84, 47.27, 8.97),
                 minZoom = 10.0,
                 maxZoom = 15.0,
                 approxMb = 500
-            )
-        )
-        list.add(
+            ),
             OfflineArea(
-                id = "he",
-                name = "Hessen",
-                bounds = LatLngBounds.from(51.7, 10.3, 49.4, 7.7),
+                id = "be",
+                name = "Berlin",
+                bounds = LatLngBounds.from(52.68, 13.77, 52.33, 13.08),
+                minZoom = 10.0,
+                maxZoom = 16.0,
+                approxMb = 120
+            ),
+            OfflineArea(
+                id = "bb",
+                name = "Brandenburg",
+                bounds = LatLngBounds.from(53.56, 14.77, 51.35, 11.26),
                 minZoom = 10.0,
                 maxZoom = 15.0,
                 approxMb = 280
-            )
-        )
-        list.add(
+            ),
             OfflineArea(
-                id = "nrw",
-                name = "Nordrhein-Westfalen",
-                bounds = LatLngBounds.from(52.6, 9.5, 50.3, 5.8),
+                id = "hb",
+                name = "Bremen",
+                bounds = LatLngBounds.from(53.60, 8.95, 53.00, 8.48),
+                minZoom = 10.0,
+                maxZoom = 16.0,
+                approxMb = 60
+            ),
+            OfflineArea(
+                id = "hh",
+                name = "Hamburg",
+                bounds = LatLngBounds.from(53.75, 10.33, 53.39, 9.73),
+                minZoom = 10.0,
+                maxZoom = 16.0,
+                approxMb = 80
+            ),
+            OfflineArea(
+                id = "he",
+                name = "Hessen",
+                bounds = LatLngBounds.from(51.65, 10.25, 49.39, 7.77),
+                minZoom = 10.0,
+                maxZoom = 15.0,
+                approxMb = 280
+            ),
+            OfflineArea(
+                id = "mv",
+                name = "Mecklenburg-Vorpommern",
+                bounds = LatLngBounds.from(54.69, 14.42, 53.07, 10.59),
+                minZoom = 10.0,
+                maxZoom = 15.0,
+                approxMb = 290
+            ),
+            OfflineArea(
+                id = "ni",
+                name = "Niedersachsen",
+                bounds = LatLngBounds.from(53.90, 11.60, 51.29, 6.65),
                 minZoom = 10.0,
                 maxZoom = 15.0,
                 approxMb = 450
+            ),
+            OfflineArea(
+                id = "nrw",
+                name = "Nordrhein-Westfalen",
+                bounds = LatLngBounds.from(52.54, 9.47, 50.32, 5.86),
+                minZoom = 10.0,
+                maxZoom = 15.0,
+                approxMb = 450
+            ),
+            OfflineArea(
+                id = "rp",
+                name = "Rheinland-Pfalz",
+                bounds = LatLngBounds.from(50.95, 8.51, 48.96, 6.11),
+                minZoom = 10.0,
+                maxZoom = 15.0,
+                approxMb = 260
+            ),
+            OfflineArea(
+                id = "sl",
+                name = "Saarland",
+                bounds = LatLngBounds.from(49.64, 7.41, 49.11, 6.35),
+                minZoom = 10.0,
+                maxZoom = 16.0,
+                approxMb = 90
+            ),
+            OfflineArea(
+                id = "sn",
+                name = "Sachsen",
+                bounds = LatLngBounds.from(51.69, 15.05, 50.17, 11.86),
+                minZoom = 10.0,
+                maxZoom = 15.0,
+                approxMb = 300
+            ),
+            OfflineArea(
+                id = "st",
+                name = "Sachsen-Anhalt",
+                bounds = LatLngBounds.from(53.05, 13.19, 50.93, 10.55),
+                minZoom = 10.0,
+                maxZoom = 15.0,
+                approxMb = 260
+            ),
+            OfflineArea(
+                id = "sh",
+                name = "Schleswig-Holstein",
+                bounds = LatLngBounds.from(55.06, 11.32, 53.36, 7.86),
+                minZoom = 10.0,
+                maxZoom = 15.0,
+                approxMb = 280
+            ),
+            OfflineArea(
+                id = "th",
+                name = "Thüringen",
+                bounds = LatLngBounds.from(51.65, 12.65, 50.20, 9.87),
+                minZoom = 10.0,
+                maxZoom = 15.0,
+                approxMb = 250
+            )
+        )
+        list.addAll(bundeslaender)
+
+        // 3. Nachbarländer / Urlaubsregionen
+        list.add(
+            OfflineArea(
+                id = "at",
+                name = "Österreich",
+                bounds = LatLngBounds.from(49.03, 17.17, 46.37, 9.53),
+                minZoom = 9.0,
+                maxZoom = 14.0,
+                approxMb = 550
             )
         )
         list.add(
             OfflineArea(
-                id = "be_bb",
-                name = "Berlin & Brandenburg",
-                bounds = LatLngBounds.from(53.6, 14.8, 51.3, 11.2),
+                id = "ch",
+                name = "Schweiz",
+                bounds = LatLngBounds.from(47.81, 10.50, 45.81, 5.95),
+                minZoom = 9.0,
+                maxZoom = 14.0,
+                approxMb = 480
+            )
+        )
+        list.add(
+            OfflineArea(
+                id = "mallorca",
+                name = "Mallorca (Balearen)",
+                bounds = LatLngBounds.from(39.95, 3.50, 39.25, 2.30),
                 minZoom = 10.0,
-                maxZoom = 15.0,
-                approxMb = 320
+                maxZoom = 16.0,
+                approxMb = 120
             )
         )
 
