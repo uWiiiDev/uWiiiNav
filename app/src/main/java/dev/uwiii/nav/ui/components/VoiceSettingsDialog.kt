@@ -139,7 +139,7 @@ fun VoiceSettingsDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Verfügbare Stimmen (${voices.size}):",
+                    text = "Verfügbare Offline-Stimmen (${voices.size}):",
                     color = TextWhite,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp
@@ -194,7 +194,7 @@ fun VoiceSettingsDialog(
                                         fontSize = 14.sp
                                     )
                                     Text(
-                                        text = if (voice.isNetworkConnectionRequired) "Online-Qualität" else "Offline verfügbar",
+                                        text = if (voice.isNetworkConnectionRequired) "Online-Qualität" else "Offline bereit • Ohne Funknetz",
                                         color = TextMuted,
                                         fontSize = 11.sp
                                     )
@@ -225,10 +225,15 @@ fun VoiceSettingsDialog(
 
 private fun getVoiceLabel(voice: Voice, index: Int): String {
     val nameLower = voice.name.lowercase()
-    val gender = when {
-        nameLower.contains("male") || nameLower.contains("-deb-") || nameLower.contains("-dem-") -> "Männlich"
-        nameLower.contains("female") || nameLower.contains("-dea-") || nameLower.contains("-deg-") || nameLower.contains("-def-") -> "Weiblich"
-        else -> "Stimme ${index + 1}"
+    val country = when (voice.locale.country.uppercase()) {
+        "AT" -> " (AT)"
+        "CH" -> " (CH)"
+        else -> ""
     }
-    return "Deutsch $gender (${index + 1})"
+    val gender = when {
+        nameLower.contains("male") || nameLower.contains("-deb-") || nameLower.contains("-dem-") || nameLower.contains("-ded-") -> "Männlich"
+        nameLower.contains("female") || nameLower.contains("-dea-") || nameLower.contains("-deg-") || nameLower.contains("-def-") || nameLower.contains("-dec-") -> "Weiblich"
+        else -> "Stimme"
+    }
+    return "Deutsch $gender$country ${index + 1}"
 }

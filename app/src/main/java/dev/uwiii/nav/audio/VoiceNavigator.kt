@@ -75,10 +75,11 @@ class VoiceNavigator(context: Context) {
 
     fun getGermanVoices(): List<Voice> {
         return try {
-            tts?.voices
-                ?.filter { it.locale.language == "de" }
-                ?.sortedBy { it.name }
-                ?: emptyList()
+            val allGerman = tts?.voices?.filter { it.locale.language == "de" } ?: emptyList()
+            // Bevorzuge echte Offline-Stimmen (ohne Netzwerk-Abhängigkeit)
+            val offlineOnly = allGerman.filter { !it.isNetworkConnectionRequired }
+            (if (offlineOnly.isNotEmpty()) offlineOnly else allGerman)
+                .sortedBy { it.name }
         } catch (e: Exception) {
             emptyList()
         }
