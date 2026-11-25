@@ -14,9 +14,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -45,15 +47,20 @@ import dev.uwiii.nav.camera.SpeedCameraService
 import dev.uwiii.nav.discovery.DiscoveryItem
 import dev.uwiii.nav.discovery.DiscoveryService
 import dev.uwiii.nav.favorites.FavoritesManager
+import dev.uwiii.nav.fuel.GasPriceService
 import dev.uwiii.nav.location.NavLocation
 import dev.uwiii.nav.offline.OfflineMapManager
 import dev.uwiii.nav.routing.RouteData
 import dev.uwiii.nav.routing.RoutingService
+import dev.uwiii.nav.speed.SpeedLimitService
 import dev.uwiii.nav.traffic.IncidentType
 import dev.uwiii.nav.traffic.TrafficIncident
 import dev.uwiii.nav.traffic.TrafficService
+import dev.uwiii.nav.trips.TripLogger
+import dev.uwiii.nav.trips.TripRecord
 import dev.uwiii.nav.ui.components.DiscoveryCardBanner
 import dev.uwiii.nav.ui.components.DiscoverySettingsDialog
+import dev.uwiii.nav.ui.components.GasPriceDialog
 import dev.uwiii.nav.ui.components.NavigationBottomBar
 import dev.uwiii.nav.ui.components.NavigationTopBanner
 import dev.uwiii.nav.ui.components.OfflineMapsDialog
@@ -61,6 +68,8 @@ import dev.uwiii.nav.ui.components.SearchBarOverlay
 import dev.uwiii.nav.ui.components.SpeedCameraAlertBanner
 import dev.uwiii.nav.ui.components.SpeedometerOverlay
 import dev.uwiii.nav.ui.components.TrafficAlertBanner
+import dev.uwiii.nav.ui.components.TripHistoryDialog
+import dev.uwiii.nav.ui.components.TripSummaryDialog
 import dev.uwiii.nav.ui.components.VoiceSettingsDialog
 import dev.uwiii.nav.ui.theme.CyanPrimary
 import dev.uwiii.nav.ui.theme.DarkSurface
@@ -144,6 +153,18 @@ fun NavigationScreen(
     var currentTrafficIncident by remember { mutableStateOf<TrafficIncident?>(null) }
     var currentTrafficDistance by remember { mutableStateOf(0.0) }
     var isTrafficAlertEnabled by remember { mutableStateOf(true) }
+
+    // Tempolimit-Erkennung (OSM MaxSpeed)
+    val speedLimitService = remember { SpeedLimitService(context) }
+
+    // Fahrtenbuch & Trip-Logger
+    val tripLogger = remember { TripLogger(context) }
+    var completedTripRecord by remember { mutableStateOf<TripRecord?>(null) }
+    var showTripHistoryDialog by remember { mutableStateOf(false) }
+
+    // Spritpreis-Radar (Tankerkönig API)
+    val gasPriceService = remember { GasPriceService(context) }
+    var showGasPriceDialog by remember { mutableStateOf(false) }
 
     // GitHub Update Checker State
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -313,6 +334,15 @@ fun NavigationScreen(
         }
     }
 
+    // Tempolimit & Trip-Logger Aktualisierung bei GPS-Änderung
+    LaunchedEffect(currentLocation) {
+        val loc = currentLocation ?: return@LaunchedEffect
+        speedLimitService.checkSpeedLimit(loc.latitude, loc.longitude)
+        if (tripLogger.isTracking) {
+            tripLogger.recordLocation(loc.speedKmh, loc.latitude, loc.longitude)
+        }
+    }
+
     // Turn-by-Turn Navigation & Sprachansagen während der Fahrt
     LaunchedEffect(currentLocation, activeRoute) {
         val loc = currentLocation ?: return@LaunchedEffect
@@ -338,6 +368,10 @@ fun NavigationScreen(
             voiceNavigator.speak("In $roundedDist Metern ${currentStep.instruction.lowercase()}")
         } else if (dist < 40.0 && currentStepIndex == route.steps.size - 1) {
             voiceNavigator.speak("Sie haben Ihr Ziel erreicht!")
+            val finished = tripLogger.finishTrip()
+            if (finished != null) {
+                completedTripRecord = finished
+            }
         }
     }
 
@@ -345,6 +379,7 @@ fun NavigationScreen(
     fun startNavigation(destination: LatLng, name: String) {
         val loc = currentLocation ?: return
         val map = mapInstance ?: return
+        tripLogger.startTrip(name, loc.latitude, loc.longitude)
         scope.launch {
             isCalculatingRoute = true
             val start = LatLng(loc.latitude, loc.longitude)
@@ -406,6 +441,7 @@ fun NavigationScreen(
         currentAlertCamera = null
         currentTrafficIncident = null
         currentDiscoveryItem = null
+        tripLogger.cancelTrip()
         dev.uwiii.nav.state.NavigationState.clearRoute()
         voiceNavigator.speak("Navigation beendet.")
     }
@@ -606,6 +642,43 @@ fun NavigationScreen(
                         }
                     )
                     DropdownMenuItem(
+                        text = { Text("Spritpreis-Radar", color = TextWhite) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.LocalGasStation,
+                                contentDescription = null,
+                                tint = CyanPrimary
+                            )
+                        },
+                        onClick = {
+                            showGasPriceDialog = true
+                            showOverflowMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Fahrtenbuch", color = TextWhite) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.DirectionsCar,
+                                contentDescription = null,
+                                tint = CyanPrimary
+                            )
+                        },
+                        trailingIcon = {
+                            if (tripLogger.tripHistory.isNotEmpty()) {
+                                Text(
+                                    text = "${tripLogger.tripHistory.size}",
+                                    color = TextMuted,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        },
+                        onClick = {
+                            showTripHistoryDialog = true
+                            showOverflowMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
                         text = { Text("Nach Updates suchen", color = TextWhite) },
                         leadingIcon = {
                             Icon(
@@ -666,6 +739,9 @@ fun NavigationScreen(
                     favoritesManager = favoritesManager,
                     onSelectDestination = { dest, title ->
                         startNavigation(dest, title)
+                    },
+                    onOpenGasRadar = {
+                        showGasPriceDialog = true
                     },
                     trailingActions = {
                         renderOverflowMenu()
@@ -766,7 +842,8 @@ fun NavigationScreen(
                 // Bei aktiver Navigation wandert der Tacho direkt in die untere Navigationsleiste.
                 if (activeRoute == null) {
                     SpeedometerOverlay(
-                        speedKmh = currentLocation?.speedKmh ?: 0f
+                        speedKmh = currentLocation?.speedKmh ?: 0f,
+                        speedLimit = speedLimitService.currentSpeedLimit
                     )
                 } else {
                     Spacer(modifier = Modifier.weight(1f))
@@ -843,6 +920,7 @@ fun NavigationScreen(
                     NavigationBottomBar(
                         routeData = route,
                         currentSpeedKmh = currentLocation?.speedKmh ?: 0f,
+                        speedLimit = speedLimitService.currentSpeedLimit,
                         remainingTime = remainingTime,
                         etaTime = etaTime,
                         overflowMenu = { renderOverflowMenu() },
@@ -924,6 +1002,34 @@ fun NavigationScreen(
                     }
                 },
                 onDismiss = { showDiscoveryDialog = false }
+            )
+        }
+
+        // 8. Trip-Zusammenfassung nach Zielankunft
+        completedTripRecord?.let { trip ->
+            TripSummaryDialog(
+                trip = trip,
+                onDismiss = { completedTripRecord = null }
+            )
+        }
+
+        // 9. Fahrtenbuch-Historie Dialog
+        if (showTripHistoryDialog) {
+            TripHistoryDialog(
+                tripLogger = tripLogger,
+                onDismiss = { showTripHistoryDialog = false }
+            )
+        }
+
+        // 10. Spritpreis-Radar Dialog
+        if (showGasPriceDialog) {
+            GasPriceDialog(
+                fuelService = gasPriceService,
+                userLocation = currentLocation?.let { LatLng(it.latitude, it.longitude) },
+                onSelectStation = { loc, brand ->
+                    startNavigation(loc, brand)
+                },
+                onDismiss = { showGasPriceDialog = false }
             )
         }
     }

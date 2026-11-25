@@ -42,6 +42,7 @@ fun SearchBarOverlay(
     favoritesManager: FavoritesManager,
     onSelectDestination: (LatLng, String) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenGasRadar: (() -> Unit)? = null,
     trailingActions: @Composable (() -> Unit)? = null
 ) {
     var query by remember { mutableStateOf("") }
@@ -182,8 +183,12 @@ fun SearchBarOverlay(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    CategoryPill(icon = Icons.Default.LocalGasStation, label = "Tankstellen") {
-                        executeSearch("Tankstelle")
+                    CategoryPill(icon = Icons.Default.LocalGasStation, label = "Spritpreise") {
+                        if (onOpenGasRadar != null) {
+                            onOpenGasRadar()
+                        } else {
+                            executeSearch("Tankstelle")
+                        }
                     }
                     CategoryPill(icon = Icons.Default.EvStation, label = "Ladesäulen") {
                         executeSearch("Ladesäule")

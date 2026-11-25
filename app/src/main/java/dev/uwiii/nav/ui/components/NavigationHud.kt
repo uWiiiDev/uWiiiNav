@@ -91,6 +91,7 @@ fun NavigationTopBanner(
 fun NavigationBottomBar(
     routeData: RouteData,
     currentSpeedKmh: Float,
+    speedLimit: Int? = null,
     remainingTime: String? = null,
     etaTime: String? = null,
     isMuted: Boolean = false,
@@ -119,29 +120,42 @@ fun NavigationBottomBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 1. Live-Geschwindigkeit (Tacho-Pille)
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .border(1.5.dp, speedColor.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
+            // 1. Live-Geschwindigkeit (Tacho-Pille) & Tempolimit-Schild
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "$roundedSpeed",
-                        color = TextWhite,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.SansSerif
-                    )
-                    Text(
-                        text = "km/h",
-                        color = TextMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .border(1.5.dp, speedColor.copy(alpha = 0.85f), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "$roundedSpeed",
+                            color = TextWhite,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.SansSerif
+                        )
+                        Text(
+                            text = "km/h",
+                            color = TextMuted,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+
+                if (speedLimit != null) {
+                    SpeedLimitSign(
+                        speedLimit = speedLimit,
+                        currentSpeedKmh = currentSpeedKmh,
+                        size = 38.dp
                     )
                 }
             }

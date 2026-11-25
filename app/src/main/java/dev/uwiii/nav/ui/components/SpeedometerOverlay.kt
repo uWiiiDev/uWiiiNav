@@ -24,6 +24,7 @@ import kotlin.math.roundToInt
 @Composable
 fun SpeedometerOverlay(
     speedKmh: Float,
+    speedLimit: Int? = null,
     remainingTime: String? = null,
     etaTime: String? = null,
     modifier: Modifier = Modifier
@@ -35,68 +36,82 @@ fun SpeedometerOverlay(
         else -> SpeedGreen
     }
 
-    Box(
+    Row(
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
-            .width(108.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(DarkSurface80)
-            .border(2.dp, accentColor.copy(alpha = 0.8f), RoundedCornerShape(18.dp))
-            .padding(vertical = 10.dp, horizontal = 8.dp),
-        contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "$roundedSpeed",
-                color = TextWhite,
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.SansSerif
-            )
-            Text(
-                text = "km/h",
-                color = TextMuted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-
-            if (!remainingTime.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                HorizontalDivider(
-                    color = Color.White.copy(alpha = 0.15f),
-                    thickness = 1.dp,
-                    modifier = Modifier.padding(horizontal = 4.dp)
+        Box(
+            modifier = Modifier
+                .width(108.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(DarkSurface80)
+                .border(2.dp, accentColor.copy(alpha = 0.8f), RoundedCornerShape(18.dp))
+                .padding(vertical = 10.dp, horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "$roundedSpeed",
+                    color = TextWhite,
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = FontFamily.SansSerif
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "km/h",
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Schedule,
-                        contentDescription = null,
-                        tint = CyanPrimary,
-                        modifier = Modifier.size(12.dp)
+                if (!remainingTime.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.15f),
+                        thickness = 1.dp,
+                        modifier = Modifier.padding(horizontal = 4.dp)
                     )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = remainingTime,
-                        color = CyanPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                if (!etaTime.isNullOrBlank()) {
-                    Text(
-                        text = "Ankunft: $etaTime",
-                        color = TextMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = CyanPrimary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = remainingTime,
+                            color = CyanPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (!etaTime.isNullOrBlank()) {
+                        Text(
+                            text = "Ankunft: $etaTime",
+                            color = TextMuted,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
+        }
+
+        if (speedLimit != null) {
+            SpeedLimitSign(
+                speedLimit = speedLimit,
+                currentSpeedKmh = speedKmh,
+                size = 46.dp
+            )
         }
     }
 }
