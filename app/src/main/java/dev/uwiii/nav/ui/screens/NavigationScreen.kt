@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,10 +41,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.uwiii.nav.audio.VoiceNavigator
 import dev.uwiii.nav.camera.SpeedCamera
 import dev.uwiii.nav.camera.SpeedCameraService
+import dev.uwiii.nav.discovery.DiscoveryItem
+import dev.uwiii.nav.discovery.DiscoveryService
 import dev.uwiii.nav.location.NavLocation
 import dev.uwiii.nav.offline.OfflineMapManager
 import dev.uwiii.nav.routing.RouteData
 import dev.uwiii.nav.routing.RoutingService
+import dev.uwiii.nav.ui.components.DiscoveryCardBanner
+import dev.uwiii.nav.ui.components.DiscoverySettingsDialog
 import dev.uwiii.nav.ui.components.NavigationBottomBar
 import dev.uwiii.nav.ui.components.NavigationTopBanner
 import dev.uwiii.nav.ui.components.OfflineMapsDialog
@@ -121,6 +126,11 @@ fun NavigationScreen(
     var isCameraAlertEnabled by remember { mutableStateOf(true) }
     var currentAlertCamera by remember { mutableStateOf<SpeedCamera?>(null) }
     var currentAlertDistance by remember { mutableStateOf(0.0) }
+
+    // Entdecker-Modus (Kultur & Wissenswertes in der Umgebung)
+    val discoveryService = remember { DiscoveryService(context) }
+    var currentDiscoveryItem by remember { mutableStateOf<DiscoveryItem?>(null) }
+    var showDiscoveryDialog by remember { mutableStateOf(false) }
 
     // GitHub Update Checker State
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -242,6 +252,22 @@ fun NavigationScreen(
             }
         } else {
             currentAlertCamera = null
+        }
+    }
+
+    // Entdecker-Modus: Sehenswürdigkeiten & Wissenswertes in der Umgebung suchen
+    LaunchedEffect(currentLocation, discoveryService.isEnabled) {
+        val loc = currentLocation ?: return@LaunchedEffect
+        if (!discoveryService.isEnabled) {
+            currentDiscoveryItem = null
+            return@LaunchedEffect
+        }
+        val sight = discoveryService.checkNearbySights(loc.latitude, loc.longitude)
+        if (sight != null) {
+            currentDiscoveryItem = sight
+            if (discoveryService.isAudioEnabled && !voiceNavigator.isMuted) {
+                voiceNavigator.speak("Wissenswertes in der Nähe: ${sight.title}. ${sight.extract}", force = false)
+            }
         }
     }
 
@@ -457,6 +483,32 @@ fun NavigationScreen(
                     DropdownMenuItem(
                         text = {
                             Text(
+                                text = if (discoveryService.isEnabled) "Entdecker-Modus: An" else "Entdecker-Modus: Aus",
+                                color = if (discoveryService.isEnabled) CyanPrimary else TextMuted
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.TravelExplore,
+                                contentDescription = null,
+                                tint = if (discoveryService.isEnabled) CyanPrimary else TextMuted
+                            )
+                        },
+                        trailingIcon = {
+                            Text(
+                                text = "${discoveryService.displayDurationSeconds}s",
+                                color = TextMuted,
+                                fontSize = 11.sp
+                            )
+                        },
+                        onClick = {
+                            showDiscoveryDialog = true
+                            showOverflowMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
                                 text = "Stimme auswählen",
                                 color = TextWhite
                             )
@@ -569,6 +621,14 @@ fun NavigationScreen(
                 camera = currentAlertCamera,
                 distanceMeters = currentAlertDistance,
                 currentSpeedKmh = currentLocation?.speedKmh ?: 0f,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+            // Entdecker-Modus: Kultur & Sehenswürdigkeiten-Einblendung
+            DiscoveryCardBanner(
+                item = currentDiscoveryItem,
+                displayDurationSeconds = discoveryService.displayDurationSeconds,
+                onDismiss = { currentDiscoveryItem = null },
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
@@ -774,6 +834,20 @@ fun NavigationScreen(
             VoiceSettingsDialog(
                 voiceNavigator = voiceNavigator,
                 onDismiss = { showVoiceDialog = false }
+            )
+        }
+
+        // 7. Entdecker-Modus Einstellungen & Vorschau
+        if (showDiscoveryDialog) {
+            DiscoverySettingsDialog(
+                discoveryService = discoveryService,
+                onTestItem = { item ->
+                    currentDiscoveryItem = item
+                    if (discoveryService.isAudioEnabled && !voiceNavigator.isMuted) {
+                        voiceNavigator.speak("Wissenswertes in der Nähe: ${item.title}. ${item.extract}", force = false)
+                    }
+                },
+                onDismiss = { showDiscoveryDialog = false }
             )
         }
     }
