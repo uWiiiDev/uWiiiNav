@@ -18,6 +18,10 @@
     <!-- Display während der Fahrt nicht ausschalten (WAKE_LOCK) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Android Auto Navigation & Karten-Templates Berechtigungen -->
+    <uses-permission android:name="androidx.car.app.NAVIGATION_TEMPLATES" />
+    <uses-permission android:name="androidx.car.app.ACCESS_SURFACE" />
+
     <application
         android:name=".UWiiiNavApp"
         android:allowBackup="true"
@@ -44,6 +48,10 @@
         <meta-data
             android:name="androidx.car.app.minCarApiLevel"
             android:value="1" />
+
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
 
         <service
             android:name=".car.UWiiiCarAppService"

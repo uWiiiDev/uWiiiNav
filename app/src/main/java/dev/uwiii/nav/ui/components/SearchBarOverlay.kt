@@ -146,7 +146,7 @@ fun SearchBarOverlay(
                             }
                         }
                     }
-                    Divider(color = Color.White.copy(alpha = 0.05f))
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
                 }
             }
         }

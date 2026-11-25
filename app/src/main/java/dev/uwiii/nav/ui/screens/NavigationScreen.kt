@@ -15,8 +15,10 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,7 +48,10 @@ import dev.uwiii.nav.ui.components.SearchBarOverlay
 import dev.uwiii.nav.ui.components.SpeedCameraAlertBanner
 import dev.uwiii.nav.ui.components.SpeedometerOverlay
 import dev.uwiii.nav.ui.theme.CyanPrimary
+import dev.uwiii.nav.ui.theme.DarkSurface
 import dev.uwiii.nav.ui.theme.DarkSurface80
+import dev.uwiii.nav.ui.theme.SpeedGreen
+import dev.uwiii.nav.ui.theme.SpeedRed
 import dev.uwiii.nav.ui.theme.TextMuted
 import dev.uwiii.nav.ui.theme.TextWhite
 import dev.uwiii.nav.updater.GitHubUpdateChecker
@@ -93,6 +98,7 @@ fun NavigationScreen(
     var activePolyline by remember { mutableStateOf<Polyline?>(null) }
     var destinationMarker by remember { mutableStateOf<Marker?>(null) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
 
     // Gefahrenstellen- & Blitzerwarner State
     val cameraService = remember { SpeedCameraService() }
@@ -130,7 +136,7 @@ fun NavigationScreen(
 
     // Beim Start einmal im Hintergrund nach Updates schauen
     LaunchedEffect(Unit) {
-        val info = updateChecker.checkForUpdates("1.0.0")
+        val info = updateChecker.checkForUpdates("1.5.0")
         if (info.hasUpdate) {
             updateInfo = info
             showUpdateDialog = true
@@ -348,51 +354,91 @@ fun NavigationScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    // Gefahrenstellen- & Blitzer-Warner Schalter
-                    IconButton(
-                        onClick = { isCameraAlertEnabled = !isCameraAlertEnabled },
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(DarkSurface80)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = "Gefahrenstellen-Warner",
-                            tint = if (isCameraAlertEnabled) Color(0xFFFF5252) else TextMuted
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // Offline-Karten Button
-                    IconButton(
-                        onClick = { showOfflineDialog = true },
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(DarkSurface80)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Offline-Karten verwalten",
-                            tint = CyanPrimary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                val info = updateChecker.checkForUpdates("1.0.0")
-                                updateInfo = info
-                                showUpdateDialog = true
-                            }
-                        },
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(DarkSurface80)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SystemUpdate,
-                            contentDescription = "Nach Updates suchen",
-                            tint = if (updateInfo?.hasUpdate == true) CyanPrimary else TextMuted
-                        )
+                    Box {
+                        IconButton(
+                            onClick = { showOverflowMenu = !showOverflowMenu },
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(DarkSurface80)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Menü",
+                                tint = TextWhite
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false },
+                            modifier = Modifier.background(DarkSurface)
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = if (isCameraAlertEnabled) "Gefahrenstellen: An" else "Gefahrenstellen: Aus",
+                                        color = if (isCameraAlertEnabled) SpeedRed else TextMuted
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.CameraAlt,
+                                        contentDescription = null,
+                                        tint = if (isCameraAlertEnabled) SpeedRed else TextMuted
+                                    )
+                                },
+                                onClick = {
+                                    isCameraAlertEnabled = !isCameraAlertEnabled
+                                    showOverflowMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Offline-Karten", color = TextWhite) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = null,
+                                        tint = CyanPrimary
+                                    )
+                                },
+                                onClick = {
+                                    showOfflineDialog = true
+                                    showOverflowMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Sprachansage testen", color = TextWhite) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.VolumeUp,
+                                        contentDescription = null,
+                                        tint = SpeedGreen
+                                    )
+                                },
+                                onClick = {
+                                    voiceNavigator.testVoice()
+                                    showOverflowMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Nach Updates suchen", color = TextWhite) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.SystemUpdate,
+                                        contentDescription = null,
+                                        tint = CyanPrimary
+                                    )
+                                },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    scope.launch {
+                                        val info = updateChecker.checkForUpdates("1.5.0")
+                                        updateInfo = info
+                                        showUpdateDialog = true
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
