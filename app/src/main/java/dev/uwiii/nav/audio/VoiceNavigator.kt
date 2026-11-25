@@ -62,10 +62,12 @@ class VoiceNavigator(context: Context) {
 
                 isInitialized = true
 
-                // Falls während des Startens eine Ansage getriggert wurde: Jetzt ausführen
+                // Falls während des Startens eine Ansage getriggert wurde: Nur ausführen wenn nicht stumm
                 pendingSpeech?.let { text ->
                     pendingSpeech = null
-                    speak(text, force = true)
+                    if (!isMuted) {
+                        speak(text)
+                    }
                 }
             } else {
                 Log.e("uWiiiNavAudio", "TTS-Initialisierung fehlgeschlagen mit Status: $status")
@@ -90,7 +92,7 @@ class VoiceNavigator(context: Context) {
             tts?.voice = voice
             selectedVoiceName = voice.name
             prefs.edit().putString("selected_voice", voice.name).apply()
-            speak("Dies ist Ihre neue Navigationsstimme.", force = true)
+            speak("Dies ist Ihre neue Navigationsstimme.", isTest = true)
         } catch (e: Exception) {
             Log.e("uWiiiNavAudio", "Fehler bei Stimmauswahl", e)
         }
@@ -99,6 +101,7 @@ class VoiceNavigator(context: Context) {
     fun toggleMute(): Boolean {
         isMuted = !isMuted
         if (isMuted) {
+            pendingSpeech = null
             stopSpeaking()
         }
         prefs.edit().putBoolean("is_muted", isMuted).apply()
@@ -117,11 +120,11 @@ class VoiceNavigator(context: Context) {
         }
     }
 
-    fun speak(text: String, force: Boolean = false) {
+    fun speak(text: String, isTest: Boolean = false) {
         if (text.isBlank()) return
 
-        // Wenn stummgeschaltet, keine Ansagen abspielen (außer bei explizitem Test/Force)
-        if (isMuted && !force) {
+        // Wenn stummgeschaltet, ausnahmslos keine Ansagen abspielen (außer bei explizitem Nutzertest)
+        if (isMuted && !isTest) {
             Log.d("uWiiiNavAudio", "Stummgeschaltet: Ansage übersprungen '$text'")
             return
         }
@@ -129,7 +132,9 @@ class VoiceNavigator(context: Context) {
         Log.i("uWiiiNavAudio", "speak() aufgerufen: '$text' (isInitialized=$isInitialized, isMuted=$isMuted)")
 
         if (!isInitialized || tts == null) {
-            pendingSpeech = text
+            if (!isMuted) {
+                pendingSpeech = text
+            }
             if (tts == null) {
                 initTts()
             }
@@ -137,7 +142,7 @@ class VoiceNavigator(context: Context) {
         }
 
         val now = System.currentTimeMillis()
-        if (!force && text == lastSpokenText && (now - lastSpokenTime) < 8000L) {
+        if (!isTest && text == lastSpokenText && (now - lastSpokenTime) < 8000L) {
             Log.d("uWiiiNavAudio", "Wiederholte Ansage ignoriert: '$text'")
             return
         }
@@ -161,7 +166,7 @@ class VoiceNavigator(context: Context) {
         Handler(Looper.getMainLooper()).post {
             Toast.makeText(appContext, "🔊 Teste Sprachausgabe...", Toast.LENGTH_SHORT).show()
         }
-        speak("Die Sprachausgabe von uWiiiNav funktioniert einwandfrei!", force = true)
+        speak("Die Sprachausgabe von uWiiiNav funktioniert einwandfrei!", isTest = true)
     }
 
     fun shutdown() {

@@ -279,7 +279,7 @@ fun NavigationScreen(
                 if (cameraService.shouldTriggerVoiceAlert(cam.id)) {
                     val limitText = if (cam.maxSpeed != null) " bei ${cam.maxSpeed} km/h" else ""
                     val distText = if (dist >= 100) "${(dist / 50).roundToInt() * 50} Metern" else "Kürze"
-                    voiceNavigator.speak("Achtung, Geschwindigkeitskontrolle in $distText$limitText", force = true)
+                    voiceNavigator.speak("Achtung, Geschwindigkeitskontrolle in $distText$limitText")
                 }
             } else {
                 currentAlertCamera = null
@@ -300,7 +300,7 @@ fun NavigationScreen(
         if (sight != null) {
             currentDiscoveryItem = sight
             if (discoveryService.isAudioEnabled && !voiceNavigator.isMuted) {
-                voiceNavigator.speak("Wissenswertes in der Nähe: ${sight.title}. ${sight.extract}", force = false)
+                voiceNavigator.speak("Wissenswertes in der Nähe: ${sight.title}. ${sight.extract}")
             }
         }
     }
@@ -327,7 +327,7 @@ fun NavigationScreen(
                     IncidentType.ROADWORKS -> "Baustelle"
                     IncidentType.HAZARD -> "Gefahr"
                 }
-                voiceNavigator.speak("Achtung, $typeName auf der ${incident.road} in $distText", force = true)
+                voiceNavigator.speak("Achtung, $typeName auf der ${incident.road} in $distText")
             }
         } else {
             currentTrafficIncident = null
@@ -362,7 +362,7 @@ fun NavigationScreen(
             currentStepIndex++
             val nextStep = route.steps[currentStepIndex]
             dev.uwiii.nav.state.NavigationState.updateStep(nextStep, nextStep.distanceMeters)
-            voiceNavigator.speak(nextStep.instruction, force = true)
+            voiceNavigator.speak(nextStep.instruction)
         } else if (dist in 150.0..300.0) {
             val roundedDist = ((dist / 50).roundToInt() * 50).coerceAtLeast(50)
             val laneHint = currentStep.getLaneVoiceHint()
@@ -1004,7 +1004,7 @@ fun NavigationScreen(
                 onTestItem = { item ->
                     currentDiscoveryItem = item
                     if (discoveryService.isAudioEnabled && !voiceNavigator.isMuted) {
-                        voiceNavigator.speak("Wissenswertes in der Nähe: ${item.title}. ${item.extract}", force = false)
+                        voiceNavigator.speak("Wissenswertes in der Nähe: ${item.title}. ${item.extract}")
                     }
                 },
                 onDismiss = { showDiscoveryDialog = false }
