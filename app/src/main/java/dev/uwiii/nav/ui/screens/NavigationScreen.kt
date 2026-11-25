@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Traffic
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
@@ -47,6 +48,9 @@ import dev.uwiii.nav.location.NavLocation
 import dev.uwiii.nav.offline.OfflineMapManager
 import dev.uwiii.nav.routing.RouteData
 import dev.uwiii.nav.routing.RoutingService
+import dev.uwiii.nav.traffic.IncidentType
+import dev.uwiii.nav.traffic.TrafficIncident
+import dev.uwiii.nav.traffic.TrafficService
 import dev.uwiii.nav.ui.components.DiscoveryCardBanner
 import dev.uwiii.nav.ui.components.DiscoverySettingsDialog
 import dev.uwiii.nav.ui.components.NavigationBottomBar
@@ -55,6 +59,7 @@ import dev.uwiii.nav.ui.components.OfflineMapsDialog
 import dev.uwiii.nav.ui.components.SearchBarOverlay
 import dev.uwiii.nav.ui.components.SpeedCameraAlertBanner
 import dev.uwiii.nav.ui.components.SpeedometerOverlay
+import dev.uwiii.nav.ui.components.TrafficAlertBanner
 import dev.uwiii.nav.ui.components.VoiceSettingsDialog
 import dev.uwiii.nav.ui.theme.CyanPrimary
 import dev.uwiii.nav.ui.theme.DarkSurface
@@ -131,6 +136,12 @@ fun NavigationScreen(
     val discoveryService = remember { DiscoveryService(context) }
     var currentDiscoveryItem by remember { mutableStateOf<DiscoveryItem?>(null) }
     var showDiscoveryDialog by remember { mutableStateOf(false) }
+
+    // Autobahn Live-Verkehr & Stau-Service
+    val trafficService = remember { TrafficService() }
+    var currentTrafficIncident by remember { mutableStateOf<TrafficIncident?>(null) }
+    var currentTrafficDistance by remember { mutableStateOf(0.0) }
+    var isTrafficAlertEnabled by remember { mutableStateOf(true) }
 
     // GitHub Update Checker State
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -271,6 +282,35 @@ fun NavigationScreen(
         }
     }
 
+    // Autobahn Live-Stauprüfung bei GPS-Aktualisierung
+    LaunchedEffect(currentLocation, activeRoute, isTrafficAlertEnabled) {
+        val loc = currentLocation ?: return@LaunchedEffect
+        if (!isTrafficAlertEnabled) {
+            currentTrafficIncident = null
+            return@LaunchedEffect
+        }
+        val alert = trafficService.findIncidentAhead(loc, maxDistanceMeters = 15000.0)
+        if (alert != null) {
+            val (incident, dist) = alert
+            currentTrafficIncident = incident
+            currentTrafficDistance = dist
+
+            if (trafficService.shouldTriggerVoiceAlert(incident.id)) {
+                val distText = if (dist >= 1000) "${(dist / 1000.0).roundToInt()} Kilometern" else "${(dist / 100).roundToInt() * 100} Metern"
+                val typeName = when (incident.type) {
+                    IncidentType.CLOSURE -> "Sperrung"
+                    IncidentType.ACCIDENT -> "Unfall"
+                    IncidentType.TRAFFIC_JAM -> "Stau"
+                    IncidentType.ROADWORKS -> "Baustelle"
+                    IncidentType.HAZARD -> "Gefahr"
+                }
+                voiceNavigator.speak("Achtung, $typeName auf der ${incident.road} in $distText", force = true)
+            }
+        } else {
+            currentTrafficIncident = null
+        }
+    }
+
     // Turn-by-Turn Navigation & Sprachansagen während der Fahrt
     LaunchedEffect(currentLocation, activeRoute) {
         val loc = currentLocation ?: return@LaunchedEffect
@@ -343,6 +383,7 @@ fun NavigationScreen(
 
                 dev.uwiii.nav.state.NavigationState.setRoute(route, name)
                 scope.launch { cameraService.loadCamerasForRoute(route.points) }
+                scope.launch { trafficService.loadTrafficForRoute(route) }
                 voiceNavigator.speak("Route nach $name berechnet. ${route.distanceKm}, Fahrzeit etwa ${route.durationMin}. Gute Fahrt!")
             }
         }
@@ -359,6 +400,9 @@ fun NavigationScreen(
         destinationMarker = null
         activeRoute = null
         currentStepIndex = 0
+        currentAlertCamera = null
+        currentTrafficIncident = null
+        currentDiscoveryItem = null
         dev.uwiii.nav.state.NavigationState.clearRoute()
         voiceNavigator.speak("Navigation beendet.")
     }
@@ -477,6 +521,25 @@ fun NavigationScreen(
                         },
                         onClick = {
                             isCameraAlertEnabled = !isCameraAlertEnabled
+                            showOverflowMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = if (isTrafficAlertEnabled) "Live-Verkehr & Stau: An" else "Live-Verkehr & Stau: Aus",
+                                color = if (isTrafficAlertEnabled) SpeedGreen else TextMuted
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Traffic,
+                                contentDescription = null,
+                                tint = if (isTrafficAlertEnabled) SpeedGreen else TextMuted
+                            )
+                        },
+                        onClick = {
+                            isTrafficAlertEnabled = !isTrafficAlertEnabled
                             showOverflowMenu = false
                         }
                     )
@@ -621,6 +684,14 @@ fun NavigationScreen(
                 camera = currentAlertCamera,
                 distanceMeters = currentAlertDistance,
                 currentSpeedKmh = currentLocation?.speedKmh ?: 0f,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+            // Live-Verkehr & Autobahn-Stauwarnung
+            TrafficAlertBanner(
+                incident = currentTrafficIncident,
+                distanceMeters = currentTrafficDistance,
+                onDismiss = { currentTrafficIncident = null },
                 modifier = Modifier.padding(top = 8.dp)
             )
 
