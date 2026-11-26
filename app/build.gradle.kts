@@ -12,8 +12,8 @@ android {
         applicationId = "dev.uwiii.nav"
         minSdk = 26
         targetSdk = 35
-        versionCode = 26
-        versionName = "1.12.3"
+        versionCode = 27
+        versionName = "1.12.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
