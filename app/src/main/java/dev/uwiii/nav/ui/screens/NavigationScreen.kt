@@ -103,6 +103,12 @@ import org.maplibre.android.maps.Style
 import java.util.Calendar
 import kotlin.math.*
 
+enum class CameraPerspective {
+    VIEW_2D,        // Draufsicht von oben (0° Neigung, genordet)
+    VIEW_3D,        // Klassische 3D-Verfolgerkamera von schräg oben (55° Neigung)
+    VIEW_COCKPIT    // Echte Fahrersicht (75° Neigung, tief über dem Asphalt mit Weitblick zum Horizont)
+}
+
 @SuppressLint("MissingPermission")
 @Composable
 fun NavigationScreen(
@@ -124,7 +130,8 @@ fun NavigationScreen(
 
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
-    var is3DMode by remember { mutableStateOf(true) }
+    var perspective by remember { mutableStateOf(CameraPerspective.VIEW_COCKPIT) }
+    val is3DMode = perspective != CameraPerspective.VIEW_2D
     var followUserLocation by remember { mutableStateOf(true) }
 
     // Routing & Navigation State
@@ -246,7 +253,7 @@ fun NavigationScreen(
     }
 
     // Kamera & 3D-Fahrzeugposition aktualisieren, wenn sich der GPS-Standort ändert
-    LaunchedEffect(currentLocation, followUserLocation, is3DMode) {
+    LaunchedEffect(currentLocation, followUserLocation, perspective) {
         val loc = currentLocation ?: return@LaunchedEffect
         val map = mapInstance ?: return@LaunchedEffect
 
@@ -281,28 +288,35 @@ fun NavigationScreen(
         // 2. Cockpit-Kameraführung mit freiem Blick nach vorn zum Horizont
         if (followUserLocation) {
             val metrics = context.resources.displayMetrics
-            // Im 3D-Modus Fahrzeug ins untere Viertel/Drittel setzen (70-75% Sicht nach vorn)
-            val bottomPadding = if (is3DMode) (metrics.heightPixels * 0.32).toInt() else 0
+            // Tiefen-Padding für Cockpit: Fahrzeug ganz nach unten setzen (85% freie Sicht voraus)
+            val bottomPadding = when (perspective) {
+                CameraPerspective.VIEW_2D -> 0
+                CameraPerspective.VIEW_3D -> (metrics.heightPixels * 0.30).toInt()
+                CameraPerspective.VIEW_COCKPIT -> (metrics.heightPixels * 0.44).toInt()
+            }
             map.setPadding(0, 0, 0, bottomPadding)
 
-            // Dynamischer Zoom & Neigung:
-            // Bei höherem Tempo (>75 km/h) weiter vorausschauen, bei Stadt/Abbiegungen nah am Straßenniveau
-            val targetZoom = if (activeRoute != null) {
-                if (loc.speedKmh > 75f) 16.2 else 17.6
-            } else {
-                16.8
+            // Dynamischer Zoom & Neigung je nach Perspektive:
+            val targetZoom = when (perspective) {
+                CameraPerspective.VIEW_2D -> if (activeRoute != null) 16.5 else 16.0
+                CameraPerspective.VIEW_3D -> if (loc.speedKmh > 75f) 16.2 else 17.4
+                CameraPerspective.VIEW_COCKPIT -> if (loc.speedKmh > 75f) 17.2 else 18.2
             }
-            val targetTilt = if (is3DMode) {
-                if (loc.speedKmh > 75f) 56.0 else 60.0
-            } else {
-                0.0
+            val targetTilt = when (perspective) {
+                CameraPerspective.VIEW_2D -> 0.0
+                CameraPerspective.VIEW_3D -> if (loc.speedKmh > 75f) 52.0 else 58.0
+                CameraPerspective.VIEW_COCKPIT -> if (loc.speedKmh > 75f) 72.0 else 76.0 // Echte Fahrersicht flach über Asphalt
+            }
+            val targetBearing = when (perspective) {
+                CameraPerspective.VIEW_2D -> 0.0
+                else -> loc.bearing.toDouble()
             }
 
             val cameraPosition = CameraPosition.Builder()
                 .target(LatLng(loc.latitude, loc.longitude))
                 .zoom(targetZoom)
                 .tilt(targetTilt)
-                .bearing(loc.bearing.toDouble())
+                .bearing(targetBearing)
                 .build()
 
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 650)
@@ -361,11 +375,25 @@ fun NavigationScreen(
                         }
 
                         if (followUserLocation) {
+                            val tilt = when (perspective) {
+                                CameraPerspective.VIEW_2D -> 0.0
+                                CameraPerspective.VIEW_3D -> 56.0
+                                CameraPerspective.VIEW_COCKPIT -> 75.0
+                            }
+                            val zoom = when (perspective) {
+                                CameraPerspective.VIEW_2D -> 16.0
+                                CameraPerspective.VIEW_3D -> 17.2
+                                CameraPerspective.VIEW_COCKPIT -> 18.0
+                            }
+                            val camBearing = when (perspective) {
+                                CameraPerspective.VIEW_2D -> 0.0
+                                else -> bearing.toDouble()
+                            }
                             val cameraPosition = CameraPosition.Builder()
                                 .target(nextPoint)
-                                .zoom(if (is3DMode) 17.5 else 16.5)
-                                .tilt(if (is3DMode) 60.0 else 0.0)
-                                .bearing(bearing.toDouble())
+                                .zoom(zoom)
+                                .tilt(tilt)
+                                .bearing(camBearing)
                                 .build()
                             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 450)
                         }
@@ -534,7 +562,11 @@ fun NavigationScreen(
                 lc.cameraMode = CameraMode.NONE
 
                 val metrics = c.resources.displayMetrics
-                val bottomPadding = if (is3DMode) (metrics.heightPixels * 0.32).toInt() else 0
+                val bottomPadding = when (perspective) {
+                    CameraPerspective.VIEW_2D -> 0
+                    CameraPerspective.VIEW_3D -> (metrics.heightPixels * 0.30).toInt()
+                    CameraPerspective.VIEW_COCKPIT -> (metrics.heightPixels * 0.44).toInt()
+                }
                 m.setPadding(0, 0, 0, bottomPadding)
             }
         } catch (e: Exception) {
@@ -738,6 +770,8 @@ fun NavigationScreen(
                     mapViewInstance = this
                     getMapAsync { map ->
                         mapInstance = map
+                        map.setMaxPitchPreference(82.0)
+                        map.setMinPitchPreference(0.0)
 
                         // Dynamischer Vektor-Style (Liberty für Tag, Dark für Nacht/Tunnel)
                         map.setStyle(Style.Builder().fromUri(targetStyleUrl)) { style ->
@@ -1143,30 +1177,71 @@ fun NavigationScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     horizontalAlignment = Alignment.End
                 ) {
-                    // 2D / 3D Perspektive umschalten
+                    // Perspektive umschalten: Fahrersicht -> 3D -> 2D -> Fahrersicht
                     FloatingActionButton(
                         onClick = {
-                            is3DMode = !is3DMode
+                            val nextPerspective = when (perspective) {
+                                CameraPerspective.VIEW_COCKPIT -> CameraPerspective.VIEW_3D
+                                CameraPerspective.VIEW_3D -> CameraPerspective.VIEW_2D
+                                CameraPerspective.VIEW_2D -> CameraPerspective.VIEW_COCKPIT
+                            }
+                            perspective = nextPerspective
+                            followUserLocation = true
+
                             val metrics = context.resources.displayMetrics
-                            val bottomPadding = if (is3DMode) (metrics.heightPixels * 0.32).toInt() else 0
+                            val bottomPadding = when (nextPerspective) {
+                                CameraPerspective.VIEW_2D -> 0
+                                CameraPerspective.VIEW_3D -> (metrics.heightPixels * 0.30).toInt()
+                                CameraPerspective.VIEW_COCKPIT -> (metrics.heightPixels * 0.44).toInt()
+                            }
                             mapInstance?.setPadding(0, 0, 0, bottomPadding)
+
                             currentLocation?.let { loc ->
+                                val targetZoom = when (nextPerspective) {
+                                    CameraPerspective.VIEW_2D -> 16.0
+                                    CameraPerspective.VIEW_3D -> 17.2
+                                    CameraPerspective.VIEW_COCKPIT -> 18.2
+                                }
+                                val targetTilt = when (nextPerspective) {
+                                    CameraPerspective.VIEW_2D -> 0.0
+                                    CameraPerspective.VIEW_3D -> 56.0
+                                    CameraPerspective.VIEW_COCKPIT -> 76.0
+                                }
+                                val targetBearing = when (nextPerspective) {
+                                    CameraPerspective.VIEW_2D -> 0.0
+                                    else -> loc.bearing.toDouble()
+                                }
                                 val cameraPosition = CameraPosition.Builder()
                                     .target(LatLng(loc.latitude, loc.longitude))
-                                    .zoom(if (activeRoute != null) 17.5 else 16.5)
-                                    .tilt(if (is3DMode) 60.0 else 0.0)
-                                    .bearing(if (is3DMode) loc.bearing.toDouble() else 0.0)
+                                    .zoom(targetZoom)
+                                    .tilt(targetTilt)
+                                    .bearing(targetBearing)
                                     .build()
                                 mapInstance?.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 600)
                             }
+
+                            val voiceHint = when (nextPerspective) {
+                                CameraPerspective.VIEW_COCKPIT -> "Cockpit Fahrersicht aktiviert"
+                                CameraPerspective.VIEW_3D -> "3D Ansicht aktiviert"
+                                CameraPerspective.VIEW_2D -> "2D Draufsicht aktiviert"
+                            }
+                            voiceNavigator.speak(voiceHint)
                         },
                         containerColor = DarkSurface80,
-                        contentColor = if (is3DMode) CyanPrimary else TextWhite,
+                        contentColor = when (perspective) {
+                            CameraPerspective.VIEW_COCKPIT -> SpeedGreen
+                            CameraPerspective.VIEW_3D -> CyanPrimary
+                            CameraPerspective.VIEW_2D -> TextWhite
+                        },
                         modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Explore,
-                            contentDescription = "3D Ansicht umschalten"
+                            imageVector = when (perspective) {
+                                CameraPerspective.VIEW_COCKPIT -> Icons.Default.DirectionsCar
+                                CameraPerspective.VIEW_3D -> Icons.Default.Explore
+                                CameraPerspective.VIEW_2D -> Icons.Default.Navigation
+                            },
+                            contentDescription = "Perspektive umschalten"
                         )
                     }
 
@@ -1176,13 +1251,31 @@ fun NavigationScreen(
                             followUserLocation = true
                             currentLocation?.let { loc ->
                                 val metrics = context.resources.displayMetrics
-                                val bottomPadding = if (is3DMode) (metrics.heightPixels * 0.32).toInt() else 0
+                                val bottomPadding = when (perspective) {
+                                    CameraPerspective.VIEW_2D -> 0
+                                    CameraPerspective.VIEW_3D -> (metrics.heightPixels * 0.30).toInt()
+                                    CameraPerspective.VIEW_COCKPIT -> (metrics.heightPixels * 0.44).toInt()
+                                }
                                 mapInstance?.setPadding(0, 0, 0, bottomPadding)
+                                val targetZoom = when (perspective) {
+                                    CameraPerspective.VIEW_2D -> if (activeRoute != null) 16.5 else 16.0
+                                    CameraPerspective.VIEW_3D -> if (loc.speedKmh > 75f) 16.2 else 17.4
+                                    CameraPerspective.VIEW_COCKPIT -> if (loc.speedKmh > 75f) 17.2 else 18.2
+                                }
+                                val targetTilt = when (perspective) {
+                                    CameraPerspective.VIEW_2D -> 0.0
+                                    CameraPerspective.VIEW_3D -> if (loc.speedKmh > 75f) 52.0 else 58.0
+                                    CameraPerspective.VIEW_COCKPIT -> if (loc.speedKmh > 75f) 72.0 else 76.0
+                                }
+                                val targetBearing = when (perspective) {
+                                    CameraPerspective.VIEW_2D -> 0.0
+                                    else -> loc.bearing.toDouble()
+                                }
                                 val cameraPosition = CameraPosition.Builder()
                                     .target(LatLng(loc.latitude, loc.longitude))
-                                    .zoom(if (activeRoute != null) 17.5 else 16.5)
-                                    .tilt(if (is3DMode) 60.0 else 0.0)
-                                    .bearing(loc.bearing.toDouble())
+                                    .zoom(targetZoom)
+                                    .tilt(targetTilt)
+                                    .bearing(targetBearing)
                                     .build()
                                 mapInstance?.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 600)
                             }
