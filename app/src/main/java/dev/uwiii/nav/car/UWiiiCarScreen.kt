@@ -1,27 +1,22 @@
 package dev.uwiii.nav.car
 
-import android.graphics.Rect
-import androidx.car.app.AppManager
+import android.util.Log
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
-import androidx.car.app.SurfaceCallback
-import androidx.car.app.SurfaceContainer
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.CarColor
-import androidx.car.app.model.CarIcon
 import androidx.car.app.model.Distance
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.Lane
 import androidx.car.app.navigation.model.LaneDirection
 import androidx.car.app.navigation.model.Maneuver
+import androidx.car.app.navigation.model.MessageInfo
 import androidx.car.app.navigation.model.NavigationTemplate
 import androidx.car.app.navigation.model.RoutingInfo
 import androidx.car.app.navigation.model.Step
-import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import dev.uwiii.nav.R
 import dev.uwiii.nav.state.NavigationState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,25 +24,25 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-class UWiiiCarScreen(carContext: CarContext) : Screen(carContext), SurfaceCallback, DefaultLifecycleObserver {
+class UWiiiCarScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObserver {
 
     private val scope = CoroutineScope(Dispatchers.Main)
     private var job: Job? = null
 
     init {
         lifecycle.addObserver(this)
-        try {
-            carContext.getCarService(AppManager::class.java).setSurfaceCallback(this)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
 
     override fun onResume(owner: LifecycleOwner) {
-        // Auf Zustandsänderungen (Route, Abbiegeschritt, Distanz, Tunnel-Modus) lauschen und Display im Auto aktualisieren
+        // Auf Zustandsänderungen (Route, Abbiegeschritt, Tunnel-Modus) lauschen und Display im Auto aktualisieren
         job = scope.launch {
             launch {
                 NavigationState.currentStep.collectLatest {
+                    invalidate()
+                }
+            }
+            launch {
+                NavigationState.activeRoute.collectLatest {
                     invalidate()
                 }
             }
@@ -64,6 +59,31 @@ class UWiiiCarScreen(carContext: CarContext) : Screen(carContext), SurfaceCallba
     }
 
     override fun onGetTemplate(): Template {
+        return try {
+            buildNavigationTemplate()
+        } catch (e: Exception) {
+            Log.e("UWiiiCarScreen", "Fehler beim Erstellen des Android Auto Templates", e)
+            NavigationTemplate.Builder()
+                .setNavigationInfo(
+                    MessageInfo.Builder("uWiiiNav")
+                        .setText("Fehler: ${e.message ?: "Unbekannter Fehler"}")
+                        .build()
+                )
+                .setActionStrip(
+                    ActionStrip.Builder()
+                        .addAction(
+                            Action.Builder()
+                                .setTitle("Aktualisieren")
+                                .setOnClickListener { invalidate() }
+                                .build()
+                        )
+                        .build()
+                )
+                .build()
+        }
+    }
+
+    private fun buildNavigationTemplate(): NavigationTemplate {
         val activeRoute = NavigationState.activeRoute.value
         val currentStep = NavigationState.currentStep.value
         val distanceMeters = NavigationState.distanceToNextStepMeters.value
@@ -71,19 +91,19 @@ class UWiiiCarScreen(carContext: CarContext) : Screen(carContext), SurfaceCallba
         val templateBuilder = NavigationTemplate.Builder()
         templateBuilder.setBackgroundColor(CarColor.createCustom(0xFF0A0E17.toInt(), 0xFF0A0E17.toInt()))
 
-        // 1. Manöver-Anweisungen (Abbiegekarte auf dem Auto-Display)
+        // 1. Manöver-Anweisungen (Abbiegekarte auf dem Auto-Display), wenn eine Route aktiv ist
         if (activeRoute != null && currentStep != null) {
             val maneuverType = mapManeuverType(currentStep.maneuverType, currentStep.maneuverModifier)
             val maneuver = Maneuver.Builder(maneuverType).build()
 
-            val stepBuilder = Step.Builder(currentStep.instruction)
+            val stepBuilder = Step.Builder(currentStep.instruction.ifBlank { "Dem Straßenverlauf folgen" })
                 .setManeuver(maneuver)
                 .apply {
                     if (currentStep.streetName.isNotBlank()) {
                         setRoad(currentStep.streetName)
                     }
                     if (NavigationState.isTunnelMode.value) {
-                        setCue("🚇 Tunnel-Koppelnavigation")
+                        setCue("Tunnel-Koppelnavigation aktiv")
                     }
                 }
 
@@ -137,38 +157,26 @@ class UWiiiCarScreen(carContext: CarContext) : Screen(carContext), SurfaceCallba
 
             templateBuilder.setActionStrip(actionStrip)
         } else {
-            // Keine aktive Route: Übersicht anzeigen
+            // Keine aktive Route: Übersicht / Status anzeigen
+            val messageInfo = MessageInfo.Builder("Bereit zur Navigation")
+                .setText("Wähle ein Ziel auf dem Smartphone aus")
+                .build()
+
+            templateBuilder.setNavigationInfo(messageInfo)
+
             val actionStrip = ActionStrip.Builder()
                 .addAction(
                     Action.Builder()
                         .setTitle("uWiiiNav")
-                        .setIcon(
-                            CarIcon.Builder(
-                                IconCompat.createWithResource(carContext, R.mipmap.ic_launcher)
-                            ).build()
-                        )
-                        .setOnClickListener {}
+                        .setOnClickListener {
+                            invalidate()
+                        }
                         .build()
                 )
                 .build()
 
             templateBuilder.setActionStrip(actionStrip)
         }
-
-        // Karten-Steuerleiste (z. B. Zentrieren)
-        val mapActionStrip = ActionStrip.Builder()
-            .addAction(
-                Action.Builder()
-                    .setTitle("Zentrieren")
-                    .setOnClickListener {
-                        // Kamera auf aktuellen Standort zurückführen
-                        invalidate()
-                    }
-                    .build()
-            )
-            .build()
-
-        templateBuilder.setMapActionStrip(mapActionStrip)
 
         return templateBuilder.build()
     }
@@ -194,14 +202,4 @@ class UWiiiCarScreen(carContext: CarContext) : Screen(carContext), SurfaceCallba
             else -> Maneuver.TYPE_STRAIGHT
         }
     }
-
-    override fun onSurfaceAvailable(surfaceContainer: SurfaceContainer) {
-        // Auto-Bildschirm Oberfläche verfügbar
-    }
-
-    override fun onVisibleAreaChanged(visibleArea: Rect) {}
-
-    override fun onStableAreaChanged(stableArea: Rect) {}
-
-    override fun onSurfaceDestroyed(surfaceContainer: SurfaceContainer) {}
 }
