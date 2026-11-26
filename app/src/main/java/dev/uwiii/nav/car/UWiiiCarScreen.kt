@@ -44,10 +44,17 @@ class UWiiiCarScreen(carContext: CarContext) : Screen(carContext), SurfaceCallba
     }
 
     override fun onResume(owner: LifecycleOwner) {
-        // Auf Zustandsänderungen (Route, Abbiegeschritt, Distanz) lauschen und Display im Auto aktualisieren
+        // Auf Zustandsänderungen (Route, Abbiegeschritt, Distanz, Tunnel-Modus) lauschen und Display im Auto aktualisieren
         job = scope.launch {
-            NavigationState.currentStep.collectLatest {
-                invalidate()
+            launch {
+                NavigationState.currentStep.collectLatest {
+                    invalidate()
+                }
+            }
+            launch {
+                NavigationState.isTunnelMode.collectLatest {
+                    invalidate()
+                }
             }
         }
     }
@@ -74,6 +81,9 @@ class UWiiiCarScreen(carContext: CarContext) : Screen(carContext), SurfaceCallba
                 .apply {
                     if (currentStep.streetName.isNotBlank()) {
                         setRoad(currentStep.streetName)
+                    }
+                    if (NavigationState.isTunnelMode.value) {
+                        setCue("🚇 Tunnel-Koppelnavigation")
                     }
                 }
 

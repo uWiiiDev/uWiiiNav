@@ -104,6 +104,7 @@ fun NavigationBottomBar(
     remainingTime: String? = null,
     etaTime: String? = null,
     isMuted: Boolean = false,
+    isTunnelMode: Boolean = false,
     onToggleMute: (() -> Unit)? = null,
     onCancelRoute: () -> Unit,
     modifier: Modifier = Modifier,
@@ -208,6 +209,16 @@ fun NavigationBottomBar(
                         color = TextWhite,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium
+                    )
+                }
+                if (isTunnelMode) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "🚇 TUNNEL-KOPPELNAVIGATION",
+                        color = SpeedYellow,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp
                     )
                 }
             }

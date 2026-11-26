@@ -62,7 +62,9 @@ data class RouteData(
     val points: List<LatLng>,
     val distanceMeters: Double,
     val durationSeconds: Double,
-    val steps: List<RouteStep>
+    val steps: List<RouteStep>,
+    val routeIndex: Int = 0,
+    val summary: String = ""
 ) {
     val distanceKm: String
         get() = String.format(java.util.Locale.GERMAN, "%.1f km", distanceMeters / 1000.0)

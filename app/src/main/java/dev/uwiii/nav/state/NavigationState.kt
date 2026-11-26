@@ -24,6 +24,13 @@ object NavigationState {
     private val _destinationName = MutableStateFlow<String>("")
     val destinationName: StateFlow<String> = _destinationName.asStateFlow()
 
+    private val _isTunnelMode = MutableStateFlow(false)
+    val isTunnelMode: StateFlow<Boolean> = _isTunnelMode.asStateFlow()
+
+    fun setTunnelMode(active: Boolean) {
+        _isTunnelMode.value = active
+    }
+
     fun updateLocation(location: NavLocation) {
         _currentLocation.value = location
     }
@@ -50,5 +57,6 @@ object NavigationState {
         _currentStep.value = null
         _distanceToNextStepMeters.value = 0.0
         _destinationName.value = ""
+        _isTunnelMode.value = false
     }
 }

@@ -77,10 +77,14 @@ import dev.uwiii.nav.ui.theme.DarkSurface80
 import dev.uwiii.nav.ui.theme.SpeedGreen
 import dev.uwiii.nav.ui.theme.SpeedRed
 import dev.uwiii.nav.ui.theme.SpeedYellow
+import dev.uwiii.nav.ui.components.RouteSelectionBar
+import dev.uwiii.nav.ui.components.TunnelAlertBanner
 import dev.uwiii.nav.ui.theme.TextMuted
 import dev.uwiii.nav.ui.theme.TextWhite
 import dev.uwiii.nav.updater.GitHubUpdateChecker
 import dev.uwiii.nav.updater.UpdateInfo
+import androidx.compose.foundation.isSystemInDarkTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.maplibre.android.annotations.Marker
 import org.maplibre.android.annotations.MarkerOptions
@@ -89,12 +93,14 @@ import org.maplibre.android.annotations.PolylineOptions
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import java.util.Calendar
 import kotlin.math.*
 
 @SuppressLint("MissingPermission")
@@ -136,6 +142,32 @@ fun NavigationScreen(
     var destinationMarker by remember { mutableStateOf<Marker?>(null) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
+
+    // Alternativrouten State
+    var candidateRoutes by remember { mutableStateOf<List<RouteData>>(emptyList()) }
+    var selectedRouteIndex by remember { mutableStateOf(0) }
+    var destinationPendingTarget by remember { mutableStateOf<LatLng?>(null) }
+    var destinationPendingName by remember { mutableStateOf("") }
+    var alternativePolylines by remember { mutableStateOf<List<Polyline>>(emptyList()) }
+
+    // Tunnel-Modus & Dead Reckoning (Koppelnavigation) State
+    var isTunnelMode by remember { mutableStateOf(false) }
+    var lastGpsTimestamp by remember { mutableStateOf(System.currentTimeMillis()) }
+    var lastKnownSpeedKmh by remember { mutableStateOf(0f) }
+    var deadReckoningPointIndex by remember { mutableStateOf(0) }
+    var deadReckoningLocation by remember { mutableStateOf<LatLng?>(null) }
+
+    // Automatischer Tag- / Nacht-Kartenstil State
+    val isSystemDark = isSystemInDarkTheme()
+    val isNightMode = remember(isSystemDark, isTunnelMode) {
+        if (isTunnelMode) {
+            true
+        } else {
+            val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            isSystemDark || hour < 7 || hour >= 20
+        }
+    }
+    val targetStyleUrl = if (isNightMode) "https://tiles.openfreemap.org/styles/dark" else "https://tiles.openfreemap.org/styles/liberty"
 
     // Gefahrenstellen- & Blitzerwarner State
     val cameraService = remember { SpeedCameraService() }
@@ -211,6 +243,17 @@ fun NavigationScreen(
         val loc = currentLocation ?: return@LaunchedEffect
         val map = mapInstance ?: return@LaunchedEffect
 
+        // GPS-Aktualisierungszeitpunkt & Koppelnavigations-Basis sichern
+        lastGpsTimestamp = System.currentTimeMillis()
+        lastKnownSpeedKmh = loc.speedKmh
+        deadReckoningLocation = LatLng(loc.latitude, loc.longitude)
+
+        if (isTunnelMode) {
+            isTunnelMode = false
+            dev.uwiii.nav.state.NavigationState.setTunnelMode(false)
+            voiceNavigator.speak("GPS-Signal wiederhergestellt.")
+        }
+
         // 1. 3D-Navigations-Pfeil (Chevron) mit realem Standort & Richtung füttern
         try {
             if (map.locationComponent.isLocationComponentActivated) {
@@ -256,6 +299,93 @@ fun NavigationScreen(
                 .build()
 
             map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 650)
+        }
+    }
+
+    // Dead Reckoning (Koppelnavigation bei Tunnelfahrt / GPS-Verlust)
+    LaunchedEffect(activeRoute) {
+        val route = activeRoute ?: return@LaunchedEffect
+        while (true) {
+            delay(500L)
+            if (activeRoute == null) break
+
+            val now = System.currentTimeMillis()
+            val timeSinceGps = now - lastGpsTimestamp
+
+            // Wenn seit mehr als 2.5 Sekunden kein GPS-Signal ankam und wir vor dem Verlust fuhren:
+            if (timeSinceGps > 2500L && lastKnownSpeedKmh > 10f) {
+                if (!isTunnelMode) {
+                    isTunnelMode = true
+                    dev.uwiii.nav.state.NavigationState.setTunnelMode(true)
+                    voiceNavigator.speak("GPS-Signal unterbrochen. Tunnel-Modus aktiv.")
+                }
+
+                // Koppelnavigation: Berechne gefahrene Distanz in 0.5 Sekunden
+                val speedMs = (lastKnownSpeedKmh.coerceAtLeast(20f) / 3.6f)
+                val distMoved = speedMs * 0.5
+
+                val (nextPoint, nextIdx) = advanceAlongRoute(
+                    points = route.points,
+                    startIndex = deadReckoningPointIndex,
+                    distanceMeters = distMoved.toDouble()
+                )
+                deadReckoningPointIndex = nextIdx
+                deadReckoningLocation = nextPoint
+
+                val bearing = if (nextIdx < route.points.size - 1) {
+                    calculateBearing(route.points[nextIdx], route.points[nextIdx + 1])
+                } else {
+                    currentLocation?.bearing ?: 0f
+                }
+
+                // Virtuellen Standort an MapLibre-Chevron & Kamera übergeben
+                mapInstance?.let { map ->
+                    try {
+                        if (map.locationComponent.isLocationComponentActivated) {
+                            val virtualLoc = android.location.Location("dead_reckoning").apply {
+                                latitude = nextPoint.latitude
+                                longitude = nextPoint.longitude
+                                this.bearing = bearing
+                                speed = speedMs
+                                accuracy = 15f
+                                time = now
+                            }
+                            map.locationComponent.forceLocationUpdate(virtualLoc)
+                        }
+
+                        if (followUserLocation) {
+                            val cameraPosition = CameraPosition.Builder()
+                                .target(nextPoint)
+                                .zoom(if (is3DMode) 17.5 else 16.5)
+                                .tilt(if (is3DMode) 60.0 else 0.0)
+                                .bearing(bearing.toDouble())
+                                .build()
+                            map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 450)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                // Schritt-Distanz im Tunnel aktualisieren
+                if (currentStepIndex < route.steps.size) {
+                    val currentStep = route.steps[currentStepIndex]
+                    val dist = calculateDistanceMeters(
+                        nextPoint.latitude, nextPoint.longitude,
+                        currentStep.location.latitude, currentStep.location.longitude
+                    )
+                    distanceToNextStep = dist
+                    dev.uwiii.nav.state.NavigationState.updateStep(currentStep, dist)
+
+                    // Nächster Schritt erreicht?
+                    if (dist < 35.0 && currentStepIndex < route.steps.size - 1) {
+                        currentStepIndex++
+                        val nextStep = route.steps[currentStepIndex]
+                        dev.uwiii.nav.state.NavigationState.updateStep(nextStep, nextStep.distanceMeters)
+                        voiceNavigator.speak(nextStep.instruction)
+                    }
+                }
+            }
         }
     }
 
@@ -381,54 +511,171 @@ fun NavigationScreen(
         }
     }
 
-    // Hilfsfunktion: Navigation zu Ziel starten
+    // Standort-Komponente aktivieren & 3D-Chevron konfigurieren
+    val activateLocationComponent: (android.content.Context, MapLibreMap, Style) -> Unit = { c, m, s ->
+        try {
+            val hasFine = ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val hasCoarse = ContextCompat.checkSelfPermission(c, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (hasFine || hasCoarse) {
+                val lc = m.locationComponent
+                val opts = LocationComponentActivationOptions.builder(c, s)
+                    .useDefaultLocationEngine(false)
+                    .build()
+                lc.activateLocationComponent(opts)
+                lc.isLocationComponentEnabled = true
+                lc.renderMode = RenderMode.GPS
+                lc.cameraMode = CameraMode.NONE
+
+                val metrics = c.resources.displayMetrics
+                val bottomPadding = if (is3DMode) (metrics.heightPixels * 0.32).toInt() else 0
+                m.setPadding(0, 0, 0, bottomPadding)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Hilfsfunktion: Alternativrouten auf der Karte zeichnen
+    fun redrawCandidateRoutes(
+        map: MapLibreMap,
+        routes: List<RouteData>,
+        selectedIndex: Int,
+        destination: LatLng,
+        name: String
+    ) {
+        activePolylineCasing?.let { map.removePolyline(it) }
+        activePolylineCore?.let { map.removePolyline(it) }
+        alternativePolylines.forEach { map.removePolyline(it) }
+        destinationMarker?.let { map.removeMarker(it) }
+
+        val newAlternatives = ArrayList<Polyline>()
+
+        // 1. Zuerst unselektierte Routen als dezent grau-blaue Bänder zeichnen
+        routes.forEachIndexed { idx, r ->
+            if (idx != selectedIndex) {
+                val poly = map.addPolyline(
+                    PolylineOptions()
+                        .addAll(r.points)
+                        .color(android.graphics.Color.parseColor("#778899"))
+                        .width(6f)
+                )
+                newAlternatives.add(poly)
+            }
+        }
+        alternativePolylines = newAlternatives
+
+        // 2. Ausgewählte Route mit 3D-Cyanband hervorheben
+        val selected = routes[selectedIndex]
+        activePolylineCasing = map.addPolyline(
+            PolylineOptions()
+                .addAll(selected.points)
+                .color(android.graphics.Color.parseColor("#003344"))
+                .width(13.5f)
+        )
+        activePolylineCore = map.addPolyline(
+            PolylineOptions()
+                .addAll(selected.points)
+                .color(android.graphics.Color.parseColor("#00E5FF"))
+                .width(7.5f)
+        )
+        destinationMarker = map.addMarker(
+            MarkerOptions()
+                .position(destination)
+                .title(name)
+        )
+    }
+
+    // Hilfsfunktion: Aktive Einzelroute zeichnen
+    fun redrawActiveRoute(
+        map: MapLibreMap,
+        route: RouteData,
+        destination: LatLng,
+        name: String
+    ) {
+        activePolylineCasing?.let { map.removePolyline(it) }
+        activePolylineCore?.let { map.removePolyline(it) }
+        alternativePolylines.forEach { map.removePolyline(it) }
+        destinationMarker?.let { map.removeMarker(it) }
+        alternativePolylines = emptyList()
+
+        activePolylineCasing = map.addPolyline(
+            PolylineOptions()
+                .addAll(route.points)
+                .color(android.graphics.Color.parseColor("#003344"))
+                .width(13.5f)
+        )
+        activePolylineCore = map.addPolyline(
+            PolylineOptions()
+                .addAll(route.points)
+                .color(android.graphics.Color.parseColor("#00E5FF"))
+                .width(7.5f)
+        )
+        destinationMarker = map.addMarker(
+            MarkerOptions()
+                .position(destination)
+                .title(name)
+        )
+    }
+
+    // Hilfsfunktion: Aktive Navigation mit ausgewählter Route starten
+    fun startActiveNavigation(route: RouteData, destination: LatLng, name: String) {
+        val loc = currentLocation ?: return
+        val map = mapInstance ?: return
+
+        activeRoute = route
+        currentStepIndex = 0
+        followUserLocation = true
+        deadReckoningPointIndex = 0
+        candidateRoutes = emptyList()
+
+        redrawActiveRoute(map, route, destination, name)
+
+        tripLogger.startTrip(name, loc.latitude, loc.longitude)
+        dev.uwiii.nav.state.NavigationState.setRoute(route, name)
+        favoritesManager.addRecent(name, "", destination)
+        scope.launch { cameraService.loadCamerasForRoute(route.points) }
+        scope.launch { trafficService.loadTrafficForRoute(route) }
+        voiceNavigator.speak("Navigation gestartet. ${route.summary}. ${route.distanceKm}, etwa ${route.durationMin}. Gute Fahrt!")
+    }
+
+    // Hilfsfunktion: Route(n) berechnen & Auswahl oder Sofortstart
     fun startNavigation(destination: LatLng, name: String) {
         val loc = currentLocation ?: return
         val map = mapInstance ?: return
-        tripLogger.startTrip(name, loc.latitude, loc.longitude)
+
+        destinationPendingTarget = destination
+        destinationPendingName = name
+
         scope.launch {
             isCalculatingRoute = true
             val start = LatLng(loc.latitude, loc.longitude)
-            val route = routingService.calculateRoute(start, destination)
+            val routes = routingService.calculateRoutes(start, destination)
             isCalculatingRoute = false
 
-            if (route != null) {
-                // Altes Zeichnen entfernen
-                activePolylineCasing?.let { map.removePolyline(it) }
-                activePolylineCore?.let { map.removePolyline(it) }
-                destinationMarker?.let { map.removeMarker(it) }
+            if (routes.isNotEmpty()) {
+                if (routes.size > 1) {
+                    // Alternativrouten zur Auswahl anbieten
+                    candidateRoutes = routes
+                    selectedRouteIndex = 0
+                    redrawCandidateRoutes(map, routes, 0, destination, name)
 
-                // 3D-Navigationsband: Dunkler Tiefenrand (13.5dp) + Leuchtendes Cyan-Fahrband (7.5dp)
-                val casing = map.addPolyline(
-                    PolylineOptions()
-                        .addAll(route.points)
-                        .color(android.graphics.Color.parseColor("#003344"))
-                        .width(13.5f)
-                )
-                val core = map.addPolyline(
-                    PolylineOptions()
-                        .addAll(route.points)
-                        .color(android.graphics.Color.parseColor("#00E5FF"))
-                        .width(7.5f)
-                )
-                val marker = map.addMarker(
-                    MarkerOptions()
-                        .position(destination)
-                        .title(name)
-                )
+                    // Kamera auf Gesamtrouten-Übersicht zoomen
+                    try {
+                        val boundsBuilder = LatLngBounds.Builder()
+                        boundsBuilder.include(start)
+                        boundsBuilder.include(destination)
+                        routes.first().points.forEach { boundsBuilder.include(it) }
+                        val bounds = boundsBuilder.build()
+                        map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 130), 800)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
 
-                activePolylineCasing = casing
-                activePolylineCore = core
-                destinationMarker = marker
-                activeRoute = route
-                currentStepIndex = 0
-                followUserLocation = true
-
-                dev.uwiii.nav.state.NavigationState.setRoute(route, name)
-                favoritesManager.addRecent(name, "", destination)
-                scope.launch { cameraService.loadCamerasForRoute(route.points) }
-                scope.launch { trafficService.loadTrafficForRoute(route) }
-                voiceNavigator.speak("Route nach $name berechnet. ${route.distanceKm}, Fahrzeit etwa ${route.durationMin}. Gute Fahrt!")
+                    voiceNavigator.speak("${routes.size} Routen nach $name gefunden. Bitte wählen Sie Ihre gewünschte Strecke.")
+                } else {
+                    // Einzelne Route sofort starten
+                    startActiveNavigation(routes[0], destination, name)
+                }
             }
         }
     }
@@ -438,18 +685,41 @@ fun NavigationScreen(
         val map = mapInstance
         activePolylineCasing?.let { map?.removePolyline(it) }
         activePolylineCore?.let { map?.removePolyline(it) }
+        alternativePolylines.forEach { map?.removePolyline(it) }
         destinationMarker?.let { map?.removeMarker(it) }
         activePolylineCasing = null
         activePolylineCore = null
+        alternativePolylines = emptyList()
         destinationMarker = null
         activeRoute = null
+        candidateRoutes = emptyList()
+        destinationPendingTarget = null
         currentStepIndex = 0
+        deadReckoningPointIndex = 0
+        isTunnelMode = false
         currentAlertCamera = null
         currentTrafficIncident = null
         currentDiscoveryItem = null
         tripLogger.cancelTrip()
         dev.uwiii.nav.state.NavigationState.clearRoute()
         voiceNavigator.speak("Navigation beendet.")
+    }
+
+    // Tag-/Nacht-Kartenstil dynamisch umschalten (Solar/Tunnel/System)
+    LaunchedEffect(targetStyleUrl, mapInstance) {
+        val map = mapInstance ?: return@LaunchedEffect
+        if (map.style?.uri != targetStyleUrl) {
+            map.setStyle(Style.Builder().fromUri(targetStyleUrl)) { style ->
+                activateLocationComponent(context, map, style)
+                destinationPendingTarget?.let { dest ->
+                    if (activeRoute != null) {
+                        redrawActiveRoute(map, activeRoute!!, dest, destinationPendingName)
+                    } else if (candidateRoutes.isNotEmpty()) {
+                        redrawCandidateRoutes(map, candidateRoutes, selectedRouteIndex, dest, destinationPendingName)
+                    }
+                }
+            }
+        }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -462,9 +732,8 @@ fun NavigationScreen(
                     getMapAsync { map ->
                         mapInstance = map
 
-                        // Weltweiter OpenStreetMap Vektor-Style mit vollen Straßendetails
-                        val styleUrl = "https://tiles.openfreemap.org/styles/liberty"
-                        map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
+                        // Dynamischer Vektor-Style (Liberty für Tag, Dark für Nacht/Tunnel)
+                        map.setStyle(Style.Builder().fromUri(targetStyleUrl)) { style ->
                             // Nutzerinteraktion: Wenn der Nutzer selbst wischt/zoomt, nicht sofort zurückspringen
                             map.addOnCameraMoveStartedListener { reason ->
                                 if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
@@ -479,33 +748,7 @@ fun NavigationScreen(
                             }
 
                             // Standort-Komponente auf der Karte aktivieren
-                            try {
-                                val hasFine = ContextCompat.checkSelfPermission(
-                                    ctx,
-                                    Manifest.permission.ACCESS_FINE_LOCATION
-                                ) == PackageManager.PERMISSION_GRANTED
-                                val hasCoarse = ContextCompat.checkSelfPermission(
-                                    ctx,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                                ) == PackageManager.PERMISSION_GRANTED
-
-                                if (hasFine || hasCoarse) {
-                                    val locationComponent = map.locationComponent
-                                    val options = LocationComponentActivationOptions.builder(ctx, style)
-                                        .useDefaultLocationEngine(false)
-                                        .build()
-                                    locationComponent.activateLocationComponent(options)
-                                    locationComponent.isLocationComponentEnabled = true
-                                    locationComponent.renderMode = RenderMode.GPS // 3D-Navigationspfeil (Chevron)
-                                    locationComponent.cameraMode = CameraMode.NONE // Eigene Cockpit-Kameraführung
-
-                                    val metrics = ctx.resources.displayMetrics
-                                    val bottomPadding = if (is3DMode) (metrics.heightPixels * 0.32).toInt() else 0
-                                    map.setPadding(0, 0, 0, bottomPadding)
-                                }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
+                            activateLocationComponent(ctx, map, style)
                         }
                     }
                 }
@@ -739,7 +982,7 @@ fun NavigationScreen(
                     step = step,
                     distanceToStepMeters = distanceToNextStep
                 )
-            } else {
+            } else if (candidateRoutes.isEmpty()) {
                 SearchBarOverlay(
                     userLocation = currentLocation?.let { LatLng(it.latitude, it.longitude) },
                     favoritesManager = favoritesManager,
@@ -754,6 +997,12 @@ fun NavigationScreen(
                     }
                 )
             }
+
+            // Tunnel-Modus & Koppelnavigation Warnbanner
+            TunnelAlertBanner(
+                isTunnelMode = isTunnelMode,
+                modifier = Modifier.padding(top = 8.dp)
+            )
 
             if (isCalculatingRoute) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -916,6 +1165,35 @@ fun NavigationScreen(
                 }
             }
 
+            // Alternativrouten-Auswahlleiste (vor dem Start der Fahrt)
+            AnimatedVisibility(
+                visible = candidateRoutes.isNotEmpty() && activeRoute == null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                RouteSelectionBar(
+                    routes = candidateRoutes,
+                    selectedIndex = selectedRouteIndex,
+                    onSelectRoute = { idx ->
+                        selectedRouteIndex = idx
+                        destinationPendingTarget?.let { dest ->
+                            mapInstance?.let { map ->
+                                redrawCandidateRoutes(map, candidateRoutes, idx, dest, destinationPendingName)
+                            }
+                        }
+                    },
+                    onStartNavigation = {
+                        val chosen = candidateRoutes.getOrNull(selectedRouteIndex) ?: candidateRoutes.first()
+                        destinationPendingTarget?.let { dest ->
+                            startActiveNavigation(chosen, dest, destinationPendingName)
+                        }
+                    },
+                    onDismiss = {
+                        cancelNavigation()
+                    }
+                )
+            }
+
             // ETA-Leiste (wenn eine Route aktiv ist)
             AnimatedVisibility(
                 visible = activeRoute != null,
@@ -925,10 +1203,11 @@ fun NavigationScreen(
                 activeRoute?.let { route ->
                     NavigationBottomBar(
                         routeData = route,
-                        currentSpeedKmh = currentLocation?.speedKmh ?: 0f,
+                        currentSpeedKmh = if (isTunnelMode) lastKnownSpeedKmh else (currentLocation?.speedKmh ?: 0f),
                         speedLimit = speedLimitService.currentSpeedLimit,
                         remainingTime = remainingTime,
                         etaTime = etaTime,
+                        isTunnelMode = isTunnelMode,
                         overflowMenu = { renderOverflowMenu() },
                         onCancelRoute = { cancelNavigation() }
                     )
@@ -1049,4 +1328,44 @@ private fun calculateDistanceMeters(lat1: Double, lon1: Double, lat2: Double, lo
     val a = sin(dLat / 2).pow(2) + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
     val c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return r * c
+}
+
+// Dead Reckoning: Position entlang der Route vorausberechnen
+private fun advanceAlongRoute(
+    points: List<LatLng>,
+    startIndex: Int,
+    distanceMeters: Double
+): Pair<LatLng, Int> {
+    if (points.isEmpty()) return Pair(LatLng(0.0, 0.0), 0)
+    var remaining = distanceMeters
+    var idx = startIndex.coerceIn(0, points.size - 1)
+
+    while (idx < points.size - 1 && remaining > 0) {
+        val p1 = points[idx]
+        val p2 = points[idx + 1]
+        val d = calculateDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude)
+        if (remaining <= d) {
+            val fraction = if (d > 0) remaining / d else 0.0
+            val lat = p1.latitude + fraction * (p2.latitude - p1.latitude)
+            val lng = p1.longitude + fraction * (p2.longitude - p1.longitude)
+            return Pair(LatLng(lat, lng), idx)
+        } else {
+            remaining -= d
+            idx++
+        }
+    }
+    return Pair(points.last(), points.size - 1)
+}
+
+// Richtungswinkel (Bearing) zwischen zwei Koordinaten berechnen
+private fun calculateBearing(from: LatLng, to: LatLng): Float {
+    val lat1 = Math.toRadians(from.latitude)
+    val lon1 = Math.toRadians(from.longitude)
+    val lat2 = Math.toRadians(to.latitude)
+    val lon2 = Math.toRadians(to.longitude)
+    val dLon = lon2 - lon1
+    val y = Math.sin(dLon) * Math.cos(lat2)
+    val x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon)
+    val brng = Math.toDegrees(Math.atan2(y, x))
+    return ((brng + 360) % 360).toFloat()
 }
