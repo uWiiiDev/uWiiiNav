@@ -157,7 +157,10 @@ fun NavigationScreen(
     var deadReckoningPointIndex by remember { mutableStateOf(0) }
     var deadReckoningLocation by remember { mutableStateOf<LatLng?>(null) }
 
-    // Automatischer Tag- / Nacht-Kartenstil State
+    // Kartenstil-Einstellung (Standard: Liberty Hell & Kontrastreich, da OpenFreeMap Dark zu dunkel ist)
+    val prefs = remember { context.getSharedPreferences("uWiiiNav_prefs", android.content.Context.MODE_PRIVATE) }
+    var mapThemeMode by remember { mutableStateOf(prefs.getString("map_theme_mode", "liberty") ?: "liberty") }
+
     val isSystemDark = isSystemInDarkTheme()
     val isNightMode = remember(isSystemDark, isTunnelMode) {
         if (isTunnelMode) {
@@ -167,7 +170,11 @@ fun NavigationScreen(
             isSystemDark || hour < 7 || hour >= 20
         }
     }
-    val targetStyleUrl = if (isNightMode) "https://tiles.openfreemap.org/styles/dark" else "https://tiles.openfreemap.org/styles/liberty"
+    val targetStyleUrl = when (mapThemeMode) {
+        "liberty" -> "https://tiles.openfreemap.org/styles/liberty"
+        "dark" -> "https://tiles.openfreemap.org/styles/dark"
+        else -> if (isNightMode) "https://tiles.openfreemap.org/styles/dark" else "https://tiles.openfreemap.org/styles/liberty"
+    }
 
     // Gefahrenstellen- & Blitzerwarner State
     val cameraService = remember { SpeedCameraService() }
@@ -924,6 +931,33 @@ fun NavigationScreen(
                         },
                         onClick = {
                             showTripHistoryDialog = true
+                            showOverflowMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            val themeLabel = when (mapThemeMode) {
+                                "liberty" -> "Hell (Klar & Kontrastreich)"
+                                "dark" -> "Dunkel (Nachtmodus)"
+                                else -> "Automatisch (Tag/Nacht)"
+                            }
+                            Text("Kartenstil: $themeLabel", color = TextWhite)
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Explore,
+                                contentDescription = null,
+                                tint = CyanPrimary
+                            )
+                        },
+                        onClick = {
+                            val nextMode = when (mapThemeMode) {
+                                "liberty" -> "auto"
+                                "auto" -> "dark"
+                                else -> "liberty"
+                            }
+                            mapThemeMode = nextMode
+                            prefs.edit().putString("map_theme_mode", nextMode).apply()
                             showOverflowMenu = false
                         }
                     )
